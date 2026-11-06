@@ -1,0 +1,5 @@
+# Keep the project design document local.
+/docs/EcoGuard_Design.md
+
+# macOS metadata
+.DS_Store
