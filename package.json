@@ -1,0 +1,16 @@
+{
+  "name": "ecoguard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local browser and macOS resource manager",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "check": "node scripts/check-extension.mjs",
+    "test": "node --test extension/tests/*.test.js",
+    "build:extension": "node scripts/build-extension.mjs",
+    "build:desktop": "bash scripts/build-desktop.sh",
+    "build": "npm run build:extension && npm run build:desktop",
+    "verify": "bash scripts/verify.sh"
+  }
+}

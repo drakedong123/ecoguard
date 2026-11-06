@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>EcoGuard</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header><span class="mark" aria-hidden="true">e</span><div><h1>EcoGuard</h1><p>Browser resource manager</p></div></header>
+  <main>
+    <p class="version">Foundation build <span id="version">0.1.0</span></p>
+    <h2>Your workspace starts here.</h2>
+    <p>Local settings are ready. Automatic tab cleanup will arrive in a later milestone.</p>
+    <form id="settings">
+      <label for="idle">Inactivity threshold in minutes</label>
+      <div class="field"><input id="idle" type="number" min="5" max="1440" step="1" value="30" required disabled><button id="save" disabled>Save preference</button></div>
+      <p class="hint">5–1440 minutes. Saved locally for the future cleanup engine.</p>
+    </form>
+    <p id="feedback" role="status" aria-live="polite">Connecting to EcoGuard…</p>
+  </main>
+  <footer>No tabs inspected, unloaded or closed.</footer>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

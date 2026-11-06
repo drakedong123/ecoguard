@@ -3,3 +3,12 @@
 
 # macOS metadata
 .DS_Store
+
+# Generated build products and local tool caches
+/build/
+/.cache/
+/desktop/.build/
+/desktop/.swiftpm/
+node_modules/
+__pycache__/
+*.pyc
