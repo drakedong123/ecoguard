@@ -1,6 +1,6 @@
 # EcoGuard
 
-EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The first code milestone provides runnable app shells, local browser preferences and repeatable builds. Automatic tab cleanup, resource monitoring and desktop process actions belong to later milestones.
+EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The first code milestone provides runnable app shells, local browser preferences and repeatable builds. The first half of the second code milestone adds hostname protection and basic inactivity filtering. Automatic tab cleanup, resource monitoring and desktop process actions belong to later milestones.
 
 ## Build and verify
 
@@ -10,7 +10,7 @@ Requirements: macOS 13 or later, Apple Command Line Tools with Swift 5.9 or late
 npm run verify
 ```
 
-This validates the extension, runs preference persistence tests, builds both components, verifies the native app signature and checks the native status command. It produces:
+This validates the extension, runs preference persistence and browser policy tests, builds both components, verifies the native app signature and checks the native status command. It produces:
 
 - `build/EcoGuard.app` — a native menu bar application.
 - `build/extension/` — an unpacked Manifest V3 extension.
@@ -55,9 +55,19 @@ The extension currently requests only local storage access. It does not inspect 
 
 The full design document stays local and ignored. Generated build products and tool caches also stay out of Git.
 
-## Next code milestone
+## Second code milestone progress
 
-Implement the browser eligibility engine from design chunk 03. The repository and build foundation implemented here corresponds to design chunk 02; design chunk 01 was the earlier documentation and traceability work.
+The browser eligibility engine corresponds to design chunk 03. Its first half is implemented in `extension/hostname.js` and `extension/policy.js`:
+
+- Normalize hostnames and HTTP/HTTPS URLs, including international domain names.
+- Match protected sites by exact hostname or subdomain boundary.
+- Exclude active, pinned, audible, private, discarded, browser-protected and loading tabs.
+- Apply the configured inactivity threshold and five-minute interaction grace.
+- Reject unknown tab state and missing or invalid activity timestamps.
+
+`evaluateBasicEligibility({ tab, activity, settings, now, paused })` is a pure function; timestamps use epoch milliseconds. Its `candidate` result still requires final safety and reuse checks. The function is not connected to live tab monitoring or unloading, so the extension still requests only storage permission. Saved inactivity preferences preserve normalized site protections, including when upgrading older settings.
+
+The remaining half adds final safety/reuse decisions and feedback-based threshold adjustment. Page inspection and the scheduled worker follow in later chunks. The repository foundation corresponds to design chunk 02; design chunk 01 was documentation and traceability.
 
 ## Platform references
 
