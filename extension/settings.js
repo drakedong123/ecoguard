@@ -1,8 +1,10 @@
 import { DEFAULT_PROTECTED_HOSTS, normalizeProtectedHosts } from './hostname.js';
+import { normalizeLearnedHostDelays } from './learning.js';
 
 export const VERSION = '0.1.0';
 export const DEFAULT_SETTINGS = Object.freeze({
-  schemaVersion: 1, idleMinutes: 30, protectedHosts: DEFAULT_PROTECTED_HOSTS
+  schemaVersion: 1, idleMinutes: 30, protectedHosts: DEFAULT_PROTECTED_HOSTS,
+  learnedHostDelays: Object.freeze([])
 });
 
 export function normalizeSettings(value) {
@@ -11,7 +13,8 @@ export function normalizeSettings(value) {
     schemaVersion: 1,
     idleMinutes: Number.isInteger(minutes) && minutes >= 5 && minutes <= 1440
       ? minutes : DEFAULT_SETTINGS.idleMinutes,
-    protectedHosts: normalizeProtectedHosts(value?.protectedHosts)
+    protectedHosts: normalizeProtectedHosts(value?.protectedHosts),
+    learnedHostDelays: normalizeLearnedHostDelays(value?.learnedHostDelays)
   };
 }
 

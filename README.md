@@ -1,6 +1,6 @@
 # EcoGuard
 
-EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The first code milestone provides runnable app shells, local browser preferences and repeatable builds. The first half of the second code milestone adds hostname protection and basic inactivity filtering. Automatic tab cleanup, resource monitoring and desktop process actions belong to later milestones.
+EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The first code milestone provides runnable app shells, local browser preferences and repeatable builds. The second code milestone adds the pure browser eligibility and restore-feedback engine. Automatic tab cleanup, resource monitoring and desktop process actions belong to later milestones.
 
 ## Build and verify
 
@@ -57,17 +57,23 @@ The full design document stays local and ignored. Generated build products and t
 
 ## Second code milestone progress
 
-The browser eligibility engine corresponds to design chunk 03. Its first half is implemented in `extension/hostname.js` and `extension/policy.js`:
+The browser eligibility engine completes design chunk 03 in `extension/hostname.js`, `extension/policy.js` and `extension/learning.js`:
 
 - Normalize hostnames and HTTP/HTTPS URLs, including international domain names.
 - Match protected sites by exact hostname or subdomain boundary.
 - Exclude active, pinned, audible, private, discarded, browser-protected and loading tabs.
 - Apply the configured inactivity threshold and five-minute interaction grace.
 - Reject unknown tab state and missing or invalid activity timestamps.
+- Protect tabs with three activations in the inclusive rolling thirty-minute window.
+- Require fresh, matching safety observations and explicit absence of downloads.
+- Double an exact hostname's idle delay after a confirmed rapid restore, capped at 24 hours, retaining the newest 100 learned hosts.
+- Validate and preserve learned delays through preference saves, with a pure reset helper.
 
-`evaluateBasicEligibility({ tab, activity, settings, now, paused })` is a pure function; timestamps use epoch milliseconds. Its `candidate` result still requires final safety and reuse checks. The function is not connected to live tab monitoring or unloading, so the extension still requests only storage permission. Saved inactivity preferences preserve normalized site protections, including when upgrading older settings.
+`evaluateBasicEligibility({ tab, activity, settings, now, paused })` provides a preliminary `candidate` result. `evaluateEligibility({ tab, activity, settings, now, paused, safety, downloadsInProgress })` combines it with reuse and safety checks and returns `eligible` plus a reason. All timestamps use epoch milliseconds. Both functions are pure and are not connected to live tab monitoring or unloading, so the extension still requests only storage permission. Saved inactivity preferences preserve normalized site protections and learning, including when upgrading older settings.
 
-The remaining half adds final safety/reuse decisions and feedback-based threshold adjustment. Page inspection and the scheduled worker follow in later chunks. The repository foundation corresponds to design chunk 02; design chunk 01 was documentation and traceability.
+Safety observations must match the tab ID and exact URL, be no older than five seconds, and explicitly report successful inspection and safe page flags. Missing observations reject eligibility. This is an input contract for the later page probe, not a guarantee that every form of unsaved work or capture can be detected.
+
+`applyRestoreFeedback({ settings, discard, tab, now })` returns updated settings after activation of the same confirmed discarded tab on the same hostname within two minutes, including the exact boundary. `resetLearnedDelays(settings)` removes learning while preserving other preferences. The later worker must persist feedback and consume each discard record once. Page inspection starts in chunk 04; the scheduled worker and actual unloading follow in chunk 05. The repository foundation corresponds to design chunk 02; design chunk 01 was documentation and traceability.
 
 ## Platform references
 
