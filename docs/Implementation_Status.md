@@ -26,7 +26,7 @@ Verified on 6 November 2026 with `npm run verify` on an Apple Silicon Mac:
 
 Real Chrome installation and native GUI interaction remain separate manual checks. Successful compilation and mocked storage tests do not establish those results.
 
-## Remaining feature work
+## Further implementation milestones
 
 ### Second code milestone first half
 
@@ -65,4 +65,27 @@ Safety input requires `inspected: true`, matching `tabId` and exact `url`, `chec
 
 Verified on 8 November 2026 with `npm run verify`: all 44 tests passed; extension validation and packaging, native release build, app signature and CLI checks passed. These are supplied-observation policy tests; real-browser intervention and GUI checks remain pending.
 
-Next: chunk 04, the browser page safety probe (sticky edit tracking, media/frame checks, interaction timestamps and explicit reset). Chunk 05 connects policy to live events, scheduling, final revalidation and unloading. This milestone changes no browser permissions.
+Chunk 03 changed no browser permissions. The page safety probe follows below.
+
+### Third code milestone — Chunk 04 complete
+
+- [x] Install an isolated, top-level HTTP/HTTPS content script at document start, adding site access for safety tracking.
+- [x] Track sticky edits from captured beforeinput, input, change and composition events without reading values, targets or page text.
+- [x] Retain edit protection through submission, form reset, same-document navigation and BFCache restoration; start fresh only for a new document or confirmed explicit reset.
+- [x] Track trusted interaction timestamps, granting fresh grace on initial observation, BFCache restore and explicit reset.
+- [x] Inspect playing audio/video, attached media providers and embedded frames/plugins on demand, including open shadow trees.
+- [x] Fail closed on loading/late observation, hidden/unloaded documents, DOM failures, invalid clocks and inspection limits.
+- [x] Provide a top-frame inspection/reset client with exact URL binding, validated flags/timestamps, request freshness, a five-second timeout and caller-bound tab identity.
+- [x] Require explicit confirmation for edit reset; retain independent media/frame protections and the interaction grace period.
+- [x] Validate/package the content script and correct popup/README descriptions of page access.
+- [x] Test the actual content-script source and transport together with the existing eligibility policy, including edited and uninspectable pages being ineligible.
+
+`extension/page-safety.js` retains document-local edit and interaction state without polling, worker keepalives, persistent storage or page-world message bridges. It answers same-extension, non-tab `inspectPageSafety` and confirmed `resetPageEdits` messages only when `expectedUrl` matches the current exact URL. It reports safety flags and timestamps, never field values, page text or embedded document contents. Inspection is bounded to 20,000 elements and 100 document/open-shadow roots; exceeding either limit protects the page.
+
+`createPageSafetyClient({ tabs, now? })` in `extension/page-probe.js` exposes `inspect(tab)` and `resetEdits(tab, { confirmed: true })`. Both return a validated policy-compatible safety observation, or `{ inspected: false, reason }`. The client targets frame 0, binds the requested ID and URL before awaiting, rejects cached/future/malformed replies, strips unexpected data and times out within five seconds. Reset clears only the sticky edit flag and refreshes interaction grace; inspection failures remain protected. Scheduling and download/final tab revalidation belong to chunk 05; the user-facing reset control/confirmation belongs to chunk 06.
+
+Muted playing media and any attached media provider are protected. `capturing` and `sharing` conservatively become true for attached providers; false means no such provider was observed, not a global proof of absent capture. Unattached WebRTC/capture streams, closed shadow trees, noncomposed edits inside them and proprietary page state retain documented blind spots. Existing tabs must be refreshed after installing/reloading the extension to establish observation from document start; missing receivers remain protected.
+
+Verified on 11 November 2026 with `npm run verify`: all 64 tests passed, including 20 new page safety/transport tests; extension validation and packaging, native release build, app signature and CLI checks passed. Tests execute the content script with supplied DOM/event and message surfaces; they do not establish real Chrome permission prompts, trusted-event delivery or navigation behavior. Real Chrome and native GUI acceptance remain pending.
+
+Next: chunk 05 connects the policy and probe to browser lifecycle events, alarms, serialized scans, session persistence, download checks, final revalidation and confirmed tab unloading. No automatic unloading is enabled in chunk 04.

@@ -2,9 +2,16 @@
   "manifest_version": 3,
   "name": "EcoGuard",
   "version": "0.1.0",
-  "description": "EcoGuard development foundation. Save local preferences; cleanup arrives in a later milestone.",
+  "description": "EcoGuard page safety and local preferences. Automatic cleanup arrives in a later milestone.",
   "minimum_chrome_version": "120",
   "permissions": ["storage"],
+  "content_scripts": [{
+    "matches": ["http://*/*", "https://*/*"],
+    "js": ["page-safety.js"],
+    "run_at": "document_start",
+    "all_frames": false,
+    "world": "ISOLATED"
+  }],
   "background": { "service_worker": "background.js", "type": "module" },
   "action": { "default_title": "EcoGuard", "default_popup": "popup.html" },
   "incognito": "not_allowed",
