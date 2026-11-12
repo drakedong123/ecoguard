@@ -17,6 +17,14 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     operation = worker.saveSettings(message.idleMinutes);
   } else if (message?.type === 'setPaused') {
     operation = worker.setPaused(message.paused);
+  } else if (message?.type === 'managementStatus') {
+    operation = worker.managementStatus();
+  } else if (message?.type === 'setTabProtection') {
+    operation = worker.setTabProtection(message.tabId, message.protected, message.expectedUrl);
+  } else if (message?.type === 'setSiteProtection') {
+    operation = worker.setSiteProtection(message.hostname, message.protected);
+  } else if (message?.type === 'restoreLastUnloaded') {
+    operation = worker.restoreLastUnloaded(message.target);
   } else if (message?.type === 'unloadedTabsStatus') {
     operation = worker.run(() => unloadedTabs.list().then(tabIds => ({ tabIds })));
   } else if (message?.type === 'closeUnloadedTabs') {

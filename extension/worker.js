@@ -1,6 +1,6 @@
 import { createSettingsService, VERSION } from './settings.js';
 import { createPageSafetyClient } from './page-probe.js';
-import { hostnameFromUrl, normalizeHostname } from './hostname.js';
+import { hostnameFromUrl, normalizeHostname, hostnameMatches } from './hostname.js';
 import { evaluateBasicEligibility, evaluateEligibility, pruneRecentActivations,
   applyRestoreFeedback } from './policy.js';
 
@@ -36,7 +36,8 @@ function restoreRecord(raw, tab, at) {
       normalizeHostname(discard.hostname) === hostnameFromUrl(tab.url) &&
       validTime(discard.discardedAt, at)) {
     record.discard = { confirmed: true, tabId: tab.id,
-      hostname: discard.hostname, discardedAt: discard.discardedAt };
+      hostname: discard.hostname, discardedAt: discard.discardedAt,
+      sequence: Number.isSafeInteger(discard.sequence) && discard.sequence >= 0 ? discard.sequence : 0 };
   }
   return record;
 }
@@ -88,10 +89,12 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
     const valid = raw?.schemaVersion === 1 && raw.tabs && typeof raw.tabs === 'object' &&
       !Array.isArray(raw.tabs) && typeof raw.paused === 'boolean';
     session = { schemaVersion: 1, paused: raw === undefined ? false : !valid || raw.paused,
-      tabs: {}, lastScanAt: valid && validTime(raw.lastScanAt, at) ? raw.lastScanAt : null };
+      tabs: {}, lastScanAt: valid && validTime(raw.lastScanAt, at) ? raw.lastScanAt : null,
+      discardSequence: 0 };
     for (const tab of tabs) {
       if (validId(tab.id) && tab.incognito === false) {
         session.tabs[tab.id] = restoreRecord(valid ? raw.tabs[tab.id] : undefined, tab, at);
+        session.discardSequence = Math.max(session.discardSequence, session.tabs[tab.id].discard?.sequence ?? 0);
       }
     }
     history = restoreHistory(local[HISTORY_KEY], at);
@@ -172,6 +175,21 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
     } catch { return undefined; }
   }
 
+  async function restoreTarget() {
+    const records = Object.entries(session.tabs).filter(([, record]) => record.discard?.confirmed)
+      .sort(([a, left], [b, right]) => right.discard.discardedAt - left.discard.discardedAt ||
+        (right.discard.sequence ?? 0) - (left.discard.sequence ?? 0) || Number(b) - Number(a));
+    for (const [id, record] of records) {
+      const tab = await getTab(Number(id));
+      if (tab?.id === Number(id) && tab.incognito === false && tab.discarded === true &&
+          tab.url === record.url && hostnameFromUrl(tab.url) === record.discard.hostname) {
+        const { tabId, hostname, discardedAt } = record.discard;
+        return { tabId, hostname, discardedAt };
+      }
+    }
+    return null;
+  }
+
   async function scan(stamp) {
     const result = { discarded: 0, attempted: 0, reason: 'complete' };
     if (revision !== stamp) return { ...result, reason: 'state-changed' };
@@ -218,7 +236,7 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
         continue;
       }
       activity.discard = { confirmed: true, tabId: tab.id,
-        hostname: decision.hostname, discardedAt: time() };
+        hostname: decision.hostname, discardedAt: time(), sequence: ++session.discardSequence };
       await persist();
       await appendHistory(finalTab, 'discarded', 'eligible');
       result.discarded++;
@@ -294,13 +312,67 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
       await persist();
       return { paused: session.paused };
     }),
-    setTabProtection: (id, protectedTab) => run(async () => {
-      if (!validId(id) || typeof protectedTab !== 'boolean' || !session.tabs[id]) {
+    managementStatus: () => enqueue(async () => {
+      const config = await settings.read();
+      const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+      const hostname = hostnameFromUrl(tab?.url);
+      const currentTab = validId(tab?.id) && tab.incognito === false && hostname
+        ? { tabId: tab.id, url: tab.url, hostname, protected: session.tabs[tab.id]?.protected === true,
+          matchingHosts: config.protectedHosts.filter(rule => hostnameMatches(hostname, rule)) } : null;
+      return { currentTab, protectedHosts: config.protectedHosts, restoreTarget: await restoreTarget() };
+    }),
+    setTabProtection: (id, protectedTab, expectedUrl) => run(async () => {
+      if (!validId(id) || typeof protectedTab !== 'boolean' || !hostnameFromUrl(expectedUrl)) {
         throw new Error('Invalid tab protection request.');
       }
+      const tab = await getTab(id);
+      if (tab?.id !== id || tab.incognito !== false || tab.url !== expectedUrl) {
+        throw new Error('This tab changed or is unavailable. Reopen the popup and try again.');
+      }
+      await observe(tab);
       session.tabs[id].protected = protectedTab;
       await persist();
       return { protected: protectedTab };
+    }),
+    setSiteProtection: (hostname, protectedSite) => run(async () => {
+      const host = normalizeHostname(hostname);
+      if (!host || typeof protectedSite !== 'boolean') throw new Error('Invalid site protection request.');
+      const config = await settings.update(value => {
+        const hosts = value.protectedHosts;
+        if (protectedSite && !hosts.includes(host) && hosts.length >= 500) {
+          throw new Error('The 500-site protection limit is full. Remove a site before adding another.');
+        }
+        return { ...value, protectedHosts: protectedSite ? [...new Set([...hosts, host])]
+          : hosts.filter(rule => rule !== host) };
+      });
+      return { protectedHosts: config.protectedHosts };
+    }),
+    restoreLastUnloaded: target => run(async () => {
+      if (!validId(target?.tabId) || !normalizeHostname(target.hostname) || normalizeHostname(target.hostname) !== target.hostname ||
+          !validTime(target.discardedAt, time())) throw new Error('Invalid restore request.');
+      const record = session.tabs[target.tabId];
+      const discard = record?.discard;
+      if (!discard || discard.tabId !== target.tabId || discard.hostname !== target.hostname ||
+          discard.discardedAt !== target.discardedAt) {
+        throw new Error('That unloaded tab is no longer available. Reopen the popup and try again.');
+      }
+      const tab = await getTab(target.tabId);
+      if (tab?.id !== target.tabId || tab.incognito !== false || tab.discarded !== true ||
+          tab.url !== record.url || hostnameFromUrl(tab.url) !== target.hostname) {
+        throw new Error('That tab was restored, closed or changed. Reopen the popup and try again.');
+      }
+      // Activate the existing tab; Chrome performs its normal discarded-tab reload.
+      // Never create a replacement tab or navigate back to a saved URL.
+      const selected = await chrome.tabs.update(tab.id, { active: true });
+      if (selected?.id !== tab.id || selected.active !== true) {
+        throw new Error('Chrome did not confirm selecting the tab. Check the tab before retrying.');
+      }
+      await observe(selected);
+      await persist();
+      let focusFailed = false;
+      try { await chrome.windows.update(selected.windowId, { focused: true }); }
+      catch { focusFailed = true; }
+      return { restored: true, hostname: target.hostname, focusFailed };
     })
   };
 }

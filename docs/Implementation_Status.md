@@ -115,3 +115,16 @@ Verified on 12 November 2026 with `npm run verify`: all 99 tests passed (25 addi
 Actual Chrome permission prompts, trusted-event delivery, unload/restore behavior, service-worker shutdown and alarm timing remain pending manual acceptance in the README. Chrome does not provide an atomic conditional discard, so a state change after final validation remains a narrow race. Cross-storage crash recovery favors at-most-once feedback: consumption can succeed before a failed preference write, losing one adjustment. Pause is session-scoped and clears on browser restart/extension reload; history and learned settings remain local. Exact URLs appear only in session observations, never history.
 
 Next: chunk 06 finishes site/tab protection UI, restore-last-unloaded, history export, local data reset and confirmed edit reset. Automatic unloading now runs; automatic closing does not. Native resource monitoring and actions remain in later chunks.
+
+### Fifth code milestone, first half — Chunk 06 partially complete · 12 November 2026
+
+- [x] Add current-tab protect/unprotect buttons backed by session state and live tab-ID/exact-URL validation. Protection follows navigation within the tab, survives worker shutdown and clears with the browser session.
+- [x] Add persistent protection for the current hostname and its subdomains; expose the saved rules, including defaults, with individually labeled removal controls and inherited-rule explanations.
+- [x] Validate hostname/boolean input, enforce the 500-site bound and preserve unrelated preferences, learned delays and protections. Popup mutations invalidate scans before entering the serialized queue.
+- [x] Add restore-last-unloaded with a displayed hostname, confirmed session-record selection and live revalidation. Select the existing tab and focus its window; never recreate a closed/navigated tab or restore a Chrome-only discard.
+- [x] Route all new commands through the existing same-extension popup sender restriction; disable controls during requests and show validation, browser, storage and partial window-focus errors.
+- [x] Add a scrollable popup layout and regression coverage for persistence, stale targets, inherited rules, duplicate clicks, rejected writes, restore feedback and background message routing.
+
+This is the first half requested by the user. Chunk 06 remains incomplete: history export, local data/learned-delay reset and confirmed edit reset belong to its second half. No additional permissions were added. Manual Chrome protection/restore/focus checks are documented in the README and remain pending; automated checks use simulated browser and popup surfaces.
+
+Verified on 12 November 2026 with `npm run verify`: all 119 tests passed (20 new tests), extension validation/packaging, native release build, app signature and CLI checks passed. Restore selection also preserves actual discard order when timestamps tie, including across worker restart. Real Chrome popup layout, protection, reload and window-focus behavior remain pending manual acceptance.

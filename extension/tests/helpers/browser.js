@@ -24,6 +24,8 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
   session = {}, probe, emitOnDiscard = false } = {}) {
   const records = new Map(tabs.map(value => [value.id, structuredClone(value)]));
   const discarded = [];
+  const selected = [];
+  const focused = [];
   const removed = [];
   const errors = [];
   const alarms = new Map();
@@ -32,7 +34,9 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
     tabs: {
       onCreated: event(), onUpdated: event(), onRemoved: event(), onActivated: event(), onReplaced: event(),
       query: async query => [...records.values()]
-        .filter(tab => query.discarded === undefined || tab.discarded === query.discarded).map(tab => structuredClone(tab)),
+        .filter(tab => (query.discarded === undefined || tab.discarded === query.discarded) &&
+          (query.active === undefined || tab.active === query.active) &&
+          (!query.lastFocusedWindow || tab.windowId === 1)).map(tab => structuredClone(tab)),
       get: async id => {
         if (!records.has(id)) throw new Error('No such tab');
         return structuredClone(records.get(id));
@@ -44,8 +48,20 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
         if (emitOnDiscard) chrome.tabs.onUpdated.emit(id, { discarded: true }, structuredClone(value));
         return structuredClone(value);
       },
+      update: async (id, properties) => {
+        selected.push({ id, properties: structuredClone(properties) });
+        if (!records.has(id)) throw new Error('No such tab');
+        const target = records.get(id);
+        if (properties.active === true) {
+          for (const other of records.values()) if (other.windowId === target.windowId) other.active = false;
+          Object.assign(target, { active: true, discarded: false });
+          chrome.tabs.onActivated.emit({ tabId: id, windowId: target.windowId });
+        }
+        return structuredClone(target);
+      },
       remove: async id => { removed.push(id); records.delete(id); chrome.tabs.onRemoved.emit(id); }
     },
+    windows: { update: async (id, properties) => { focused.push({ id, properties }); return { id, ...properties }; } },
     downloads: { onCreated: event(), onChanged: event(), search: async () => [] },
     alarms: { onAlarm: event(), get: async name => alarms.get(name),
       create: async (name, info) => { alarms.set(name, { name, ...info }); } },
@@ -60,6 +76,6 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
   const safety = probe ?? { inspect: async target => safe(target) };
   const worker = createBrowserWorker({ chrome, now: () => clock.at, probe: safety,
     onError: error => errors.push(error.message) });
-  return { chrome, records, discarded, removed, errors, alarms, clock, local, session,
+  return { chrome, records, discarded, selected, focused, removed, errors, alarms, clock, local, session,
     safe, safety, worker, alarm: () => chrome.alarms.onAlarm.emit({ name: SCAN_ALARM }) };
 }

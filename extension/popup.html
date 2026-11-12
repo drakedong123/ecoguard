@@ -19,6 +19,27 @@
       <p class="hint">5–1440 minutes. New and recently active tabs get a full inactivity grace period.</p>
     </form>
     <p id="feedback" role="status" aria-live="polite">Connecting to EcoGuard…</p>
+    <section class="management" aria-labelledby="protection-heading">
+      <h2 id="protection-heading">Protect your work</h2>
+      <p id="current-site" class="site-name">Checking the current tab…</p>
+      <div class="controls">
+        <button id="protect-tab" type="button" disabled>Protect this tab</button>
+        <button id="protect-site" type="button" disabled>Protect this site</button>
+      </div>
+      <p class="hint">Tab protection lasts for this browser session. Site protection is saved and includes subdomains. Both prevent automatic unloading.</p>
+      <p id="protection-state" class="hint"></p>
+      <details>
+        <summary>Manage protected sites</summary>
+        <ul id="protected-sites" aria-label="Protected sites"></ul>
+      </details>
+      <p id="protection-feedback" role="status" aria-live="polite">Loading protection controls…</p>
+    </section>
+    <section class="management" aria-labelledby="restore-heading">
+      <h2 id="restore-heading">Restore a tab</h2>
+      <p id="restore-target" class="hint">Checking EcoGuard's unloaded tabs…</p>
+      <button id="restore-last" type="button" disabled>Restore last unloaded tab</button>
+      <p id="restore-feedback" role="status" aria-live="polite"></p>
+    </section>
     <section class="unloaded" aria-labelledby="unloaded-heading">
       <h2 id="unloaded-heading">Close unloaded tabs</h2>
       <p class="hint">Remove unloaded tabs from the tab bar across all windows, including tabs unloaded by Chrome. Active and pinned tabs are kept.</p>

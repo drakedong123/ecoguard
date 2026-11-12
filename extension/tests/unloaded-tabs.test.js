@@ -1,10 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 import { createUnloadedTabsService } from '../unloaded-tabs.js';
-import { createBrowserWorker } from '../worker.js';
 import { browser as workerBrowser } from './helpers/browser.js';
+import { popup } from './helpers/popup.js';
+import { background } from './helpers/background.js';
 
 const tab = (id, fields = {}) => ({ id, discarded: true, active: false, pinned: false, incognito: false, ...fields });
 
@@ -78,31 +77,6 @@ test('a mismatched lookup result never closes the requested tab', async () => {
   assert.deepEqual(b.removed, []);
 });
 
-const popupScript = await readFile(new URL('../popup.js', import.meta.url), 'utf8');
-
-async function popup(sendMessage) {
-  const elements = new Map();
-  const element = id => {
-    if (!elements.has(id)) elements.set(id, {
-      disabled: true, textContent: '', value: '', listeners: {},
-      reportValidity: () => true,
-      addEventListener(type, handler) { this.listeners[type] = handler; }
-    });
-    return elements.get(id);
-  };
-  const requests = [];
-  vm.runInNewContext(popupScript, {
-    document: { getElementById: element },
-    chrome: { runtime: { sendMessage: async message => {
-      requests.push(structuredClone(message));
-      if (message.type === 'status') return { ok: true, settings: { idleMinutes: 30 }, version: '0.1.0', paused: false };
-      return sendMessage(message);
-    } } }
-  });
-  await new Promise(resolve => setImmediate(resolve));
-  return { element, requests };
-}
-
 test('popup displays the count and closes only after a click, then refreshes the count', async () => {
   let closed = false;
   const p = await popup(async message => {
@@ -174,23 +148,10 @@ test('popup pause/resume reflects confirmed worker state and reports rejected ch
   assert.equal(pause.disabled, false);
 });
 
-const workerScript = (await readFile(new URL('../background.js', import.meta.url), 'utf8'))
-  .replace(/^import .*;\n/gm, '');
-
 function worker(tabs) {
-  let listener;
-  const popupSender = { id: 'ecoguard', url: 'chrome-extension://ecoguard/popup.html' };
   const chrome = workerBrowser({ tabs: [], local: {} }).chrome;
   Object.assign(chrome.tabs, tabs);
-  chrome.runtime.onMessage.addListener = callback => { listener = callback; };
-  vm.runInNewContext(workerScript, {
-    createBrowserWorker, createUnloadedTabsService, chrome, console: { warn: () => {} }
-  });
-  return {
-    send: (message, sender = popupSender) => new Promise(resolve => {
-      if (!listener(message, sender, response => resolve(structuredClone(response)))) resolve(undefined);
-    })
-  };
+  return background(chrome);
 }
 
 test('worker restricts tab closing to its own popup and routes the explicit selection', async () => {

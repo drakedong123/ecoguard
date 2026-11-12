@@ -1,6 +1,6 @@
 # EcoGuard
 
-EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The browser extension automatically unloads eligible idle tabs using page safety checks, session activity tracking and alarm-based scheduling (chunks 03–05). Its popup provides an inactivity threshold, pause/resume and a manual close-unloaded-tabs button. The remaining browser controls belong to chunk 06. Native resource monitoring and desktop process actions belong to later milestones.
+EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The browser extension automatically unloads eligible idle tabs using page safety checks, session activity tracking and alarm-based scheduling (chunks 03–05). Its popup provides an inactivity threshold, pause/resume, tab/site protection, restore-last-unloaded and manual close-unloaded-tabs controls. The first half of chunk 06 is complete; export and reset controls remain. Native resource monitoring and desktop process actions belong to later milestones.
 
 ## Build and verify
 
@@ -44,6 +44,8 @@ The app uses a local ad hoc signature. It is intended for development on the Mac
 4. Save an inactivity threshold from 5 to 1440 minutes. Reopen the popup to verify it persisted.
 5. Eligible background tabs unload after the threshold (30 minutes by default), with five minutes of interaction grace. Selecting an unloaded tab reloads it. **Pause automatic unloading** stops this behavior for the current browser session; **Resume automatic unloading** restarts it. Browser restart clears pause and grants all tabs fresh inactivity grace.
 6. The **Close unloaded tabs (N)** button closes the displayed selection of unloaded tabs across all browser windows, including tabs unloaded by Chrome itself. It is disabled when none are available. Active, pinned and private tabs are kept; tabs restored since opening the popup are skipped. Closing runs only when clicked, without an additional prompt, and the popup reports successes, skips and failures.
+7. **Protect this tab** prevents automatic unloading until unprotected, closed or the browser session ends. **Protect this site** saves protection for the displayed hostname and its subdomains. Expand **Manage protected sites** to remove an exact saved rule, including a default rule. The popup lists matching rules so inherited parent-site protection remains visible even after removing a narrower rule. These exceptions prevent automatic unloading; the explicit close button still closes its selected unloaded tabs.
+8. **Restore last unloaded tab** selects the most recent available tab confirmed as unloaded by EcoGuard and focuses its browser window. Chrome reloads the existing tab normally; closed or navigated tabs are not recreated. The displayed selection is revalidated when clicked. Tabs unloaded only by Chrome are outside this restore control. It is disabled when no confirmed EcoGuard tab is available in the current session.
 
 For a manual check, open a disposable background tab and discard it using `chrome://discards`. Reopen EcoGuard and check that the count increases. Click **Close unloaded tabs** and verify that the tab disappears while loaded and pinned tabs remain. Also test restoring or pinning a discarded tab in another window before clicking; it must be skipped. The action reads the browser's discarded state and uses the [Chrome Tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-remove), without requesting additional permissions. Chrome does not provide an atomic conditional close, so a state change between the final lookup and removal remains a narrow race.
 
@@ -107,7 +109,22 @@ Local preferences include learned hostname delays. A confirmed rapid restore dou
 - Pause from the popup and wait past a scan; confirm no new unloads. Resume and verify eligible tabs can unload. Use Chrome's extension service-worker stop control, then reopen the popup and confirm preferences, session pause and observation timestamps survived. Restart the browser separately and verify new grace and an unpaused session.
 - Reload a background test page before its threshold expires; it should receive fresh inactivity grace. Exercise the manual close-unloaded-tabs button separately using the instructions above.
 
-Automated tests use simulated browser/DOM surfaces, including a test that connects the real worker, transport and content-script sources. These do not establish actual Chrome permissions, trusted-event delivery, alarm timing or resource savings. Remaining chunk 06 controls are site/tab protection UI, restore-last-unloaded, history export, local reset and confirmed edit reset.
+Automated tests use simulated browser/DOM surfaces, including a test that connects the real worker, transport and content-script sources. These do not establish actual Chrome permissions, trusted-event delivery, alarm timing or resource savings.
+
+## Popup controls — chunk 06, first half
+
+The first half adds current-tab protection, persistent site-rule management and restore-last-unloaded. New handlers use the same popup sender checks and serialized worker queue as existing actions. Tab protection is bound to the displayed tab ID and exact URL, so a stale popup cannot silently target a different page. Site rules are validated hostnames, limited to 500, and match only the hostname itself and subdomains on a dot boundary. Removing a rule does not clear other rules, tab protection, learned delays or safety checks.
+
+Restore uses confirmed session discard records and validates the displayed tab ID, hostname, discard timestamp and live exact URL. It skips unavailable records when finding a candidate and rejects a changed selection on click. Activation triggers the existing rapid-restore feedback path at most once. A window-focus failure is reported as partial success after selecting the tab. No new permissions are required.
+
+Additional manual Chrome acceptance remains pending:
+
+- Protect and unprotect the current ordinary web tab; verify the button state survives popup/worker reopening and protection survives navigation. Restart the browser separately and confirm session tab protection clears.
+- Protect a site, reopen the popup and verify the saved rule. Visit a subdomain and confirm the inherited parent rule appears. Remove a rule under **Manage protected sites** and confirm only that rule is removed; remaining matching rules continue protecting the site. Saved rules must survive a browser restart.
+- Open a browser settings page and confirm current-tab/site buttons are disabled while saved-site management remains usable.
+- Let EcoGuard unload a disposable tab, open the popup from another tab/window and use **Restore last unloaded tab**. Confirm the same tab is selected and its window is focused, with no duplicate tab. Repeat with a closed, navigated or already restored target before clicking; it must report an error and refresh the controls.
+
+The second half of chunk 06 remains: history export, local data/learned-delay reset and confirmed edit-protection reset. Real Chrome UI, focus, permission and navigation behavior has not been claimed as verified by the automated tests.
 
 ## Platform references
 

@@ -121,7 +121,7 @@ test('active tabs in every window, pinned tabs and site/tab exceptions receive n
   const b = browser({ tabs: [tab(1, { active: true }), tab(2, { active: true, windowId: 2 }),
     tab(3, { pinned: true }), tab(4, { url: 'https://docs.google.com/document' }), tab(5)] });
   await b.worker.start();
-  await b.worker.setTabProtection(5, true);
+  await b.worker.setTabProtection(5, true, b.records.get(5).url);
   b.clock.at = 6 * MINUTE;
   await b.worker.scan();
   assert.deepEqual(b.discarded, []);
