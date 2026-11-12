@@ -16,24 +16,43 @@ const restoreFeedback = document.getElementById('restore-feedback');
 let management;
 let managementBusy = true;
 let siteRemoveButtons = [];
+const resetEdits = document.getElementById('reset-edits');
+const exportHistory = document.getElementById('export-history');
+const clearHistory = document.getElementById('clear-history');
+const resetLearning = document.getElementById('reset-learning');
+const resetLocal = document.getElementById('reset-local');
+const dataFeedback = document.getElementById('data-feedback');
+const confirmation = document.getElementById('confirmation');
+let statusReady = false;
+let dataBusy = false;
+let writesInFlight = 0;
+let pendingConfirmation = null;
+const readRequests = new Set(['status', 'managementStatus', 'unloadedTabsStatus']);
 
 async function request(message) {
-  const response = await chrome.runtime.sendMessage(message);
-  if (!response?.ok) throw new Error(response?.error ?? 'EcoGuard did not respond. Reload the extension.');
-  if (response.settings) idle.value = response.settings.idleMinutes;
-  if (response.version) document.getElementById('version').textContent = response.version;
-  return response;
+  const mutation = !readRequests.has(message.type);
+  if (mutation) { writesInFlight++; updateDataButtons(); }
+  try {
+    const response = await chrome.runtime.sendMessage(message);
+    if (!response?.ok) throw new Error(response?.error ?? 'EcoGuard did not respond. Reload the extension.');
+    if (response.settings) idle.value = response.settings.idleMinutes;
+    if (response.version) document.getElementById('version').textContent = response.version;
+    return response;
+  } finally {
+    if (mutation) { writesInFlight--; updateDataButtons(); }
+  }
 }
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
+  if (save.disabled || dataBusy || pendingConfirmation) return;
   if (!form.reportValidity()) return;
   save.disabled = true;
   try {
     await request({ type: 'saveSettings', idleMinutes: Number(idle.value) });
     feedback.textContent = 'Preference saved on this device.';
   } catch (error) { feedback.textContent = error.message; }
-  finally { save.disabled = false; }
+  finally { save.disabled = dataBusy || !!pendingConfirmation || !statusReady; }
 });
 
 function showPauseState(value) {
@@ -44,19 +63,26 @@ function showPauseState(value) {
 }
 
 pause.addEventListener('click', async () => {
-  if (pause.disabled) return;
+  if (pause.disabled || dataBusy || pendingConfirmation) return;
   pause.disabled = true;
   try { showPauseState((await request({ type: 'setPaused', paused: !paused })).paused); }
   catch (error) { feedback.textContent = error.message; }
-  finally { pause.disabled = false; }
+  finally { pause.disabled = dataBusy || !!pendingConfirmation || !statusReady; }
 });
 
-request({ type: 'status' }).then(response => {
-  idle.disabled = false; save.disabled = false;
+async function refreshStatus() {
+  statusReady = false;
+  const response = await request({ type: 'status' });
+  statusReady = true;
   showPauseState(response.paused === true);
-  pause.disabled = false;
   if (response.lastError) feedback.textContent += ` Last worker error: ${response.lastError}`;
-}).catch(error => { feedback.textContent = error.message; });
+  const count = response.historyCount ?? 0;
+  const learned = response.settings.learnedHostDelays?.length ?? 0;
+  document.getElementById('data-summary').textContent = `${count} history events · ${learned} learned site delays`;
+  updateAllButtons();
+}
+
+refreshStatus().catch(error => { feedback.textContent = error.message; });
 
 async function refreshUnloadedTabs() {
   closeUnloaded.disabled = true;
@@ -65,12 +91,12 @@ async function refreshUnloadedTabs() {
   const response = await request({ type: 'unloadedTabsStatus' });
   unloadedTabIds = response.tabIds;
   closeUnloaded.textContent = `Close unloaded tabs (${unloadedTabIds.length})`;
-  closeUnloaded.disabled = unloadedTabIds.length === 0;
+  closeUnloaded.disabled = unloadedTabIds.length === 0 || dataBusy || !!pendingConfirmation;
   return unloadedTabIds.length;
 }
 
 closeUnloaded.addEventListener('click', async () => {
-  if (closeUnloaded.disabled || unloadedTabIds.length === 0) return;
+  if (closeUnloaded.disabled || unloadedTabIds.length === 0 || dataBusy || pendingConfirmation) return;
   closeUnloaded.disabled = true;
   unloadedFeedback.textContent = 'Closing unloaded tabs…';
   let summary;
@@ -94,11 +120,13 @@ refreshUnloadedTabs().then(count => {
 }).catch(error => { unloadedFeedback.textContent = error.message; });
 
 function updateManagementButtons() {
-  protectTab.disabled = managementBusy || !management?.currentTab;
-  protectSite.disabled = managementBusy || !management?.currentTab ||
+  const busy = managementBusy || dataBusy || !!pendingConfirmation;
+  protectTab.disabled = busy || !management?.currentTab;
+  protectSite.disabled = busy || !management?.currentTab ||
     management.protectedHosts.includes(management.currentTab.hostname);
-  restoreLast.disabled = managementBusy || !management?.restoreTarget;
-  for (const button of siteRemoveButtons) button.disabled = managementBusy;
+  restoreLast.disabled = busy || !management?.restoreTarget;
+  for (const button of siteRemoveButtons) button.disabled = busy;
+  updateDataButtons();
 }
 
 function renderManagement() {
@@ -112,6 +140,15 @@ function renderManagement() {
   if (tab?.matchingHosts.length) states.push(`Site protection: ${tab.matchingHosts.join(', ')}.`);
   document.getElementById('protection-state').textContent = states.join(' ') ||
     (tab ? 'No tab or site exception. Other safety checks still apply.' : 'Protection controls are unavailable for this page.');
+  const safety = tab?.safety;
+  const pageStates = [];
+  if (safety?.inspected === true) {
+    pageStates.push(safety.edited ? 'Edited page protection is active.' : 'No edited-page protection detected.');
+    if (safety.playingMedia) pageStates.push('Playing media is protected.');
+    if (safety.hasEmbeddedFrame) pageStates.push('Embedded content is protected.');
+    if (safety.capturing || safety.sharing) pageStates.push('Detected capture/sharing is protected.');
+  } else pageStates.push('Page safety is unavailable. Refresh the page and reopen EcoGuard; uncertain pages stay protected.');
+  document.getElementById('edit-state').textContent = pageStates.join(' ');
   protectedSites.replaceChildren();
   siteRemoveButtons = [];
   for (const hostname of management.protectedHosts) {
@@ -150,7 +187,7 @@ async function refreshManagement() {
 }
 
 async function managementAction(button, output, message, success) {
-  if (button.disabled || managementBusy) return;
+  if (button.disabled || managementBusy || dataBusy || pendingConfirmation) return;
   managementBusy = true;
   updateManagementButtons();
   output.textContent = 'Working…';
@@ -182,3 +219,81 @@ restoreLast.addEventListener('click', () => managementAction(restoreLast, restor
 
 refreshManagement().then(() => { protectionFeedback.textContent = 'Protection controls ready.'; })
   .catch(error => { protectionFeedback.textContent = error.message; });
+
+function updateDataButtons() {
+  const blocked = !statusReady || dataBusy || writesInFlight > 0 || !!pendingConfirmation || managementBusy;
+  for (const button of [exportHistory, clearHistory, resetLearning, resetLocal]) button.disabled = blocked;
+  const safety = management?.currentTab?.safety;
+  resetEdits.disabled = blocked || safety?.inspected !== true || safety.edited !== true;
+}
+
+function updateAllButtons() {
+  const blocked = dataBusy || !!pendingConfirmation || !statusReady;
+  idle.disabled = blocked;
+  save.disabled = blocked;
+  pause.disabled = blocked;
+  closeUnloaded.disabled = dataBusy || !!pendingConfirmation || unloadedTabIds.length === 0;
+  updateManagementButtons();
+}
+
+function confirmReset(button, message, description, success, output = dataFeedback) {
+  if (button.disabled || dataBusy || writesInFlight > 0 || pendingConfirmation) return;
+  pendingConfirmation = { message: { ...message, confirmed: true }, success, output };
+  document.getElementById('confirmation-text').textContent = description;
+  try { confirmation.showModal(); }
+  catch (error) { pendingConfirmation = null; output.textContent = error.message; }
+  updateAllButtons();
+}
+
+async function dataAction(message, success, output = dataFeedback) {
+  if (dataBusy) return;
+  dataBusy = true;
+  updateAllButtons();
+  output.textContent = 'Working…';
+  try {
+    const result = await request(message);
+    output.textContent = message.type === 'exportHistory'
+      ? `History export started (${result.eventCount} events). Check Chrome's downloads for completion.` : success;
+  } catch (error) { output.textContent = error.message; }
+  // Refresh even after errors: a reset or browser action may have partly completed.
+  for (const refresh of [refreshStatus, refreshManagement, refreshUnloadedTabs]) {
+    try { await refresh(); }
+    catch (error) { output.textContent += ` Could not refresh: ${error.message}`; }
+  }
+  dataBusy = false;
+  updateAllButtons();
+}
+
+document.getElementById('confirm-reset').addEventListener('click', async () => {
+  if (!pendingConfirmation || dataBusy) return;
+  const action = pendingConfirmation;
+  pendingConfirmation = null;
+  confirmation.close();
+  await dataAction(action.message, action.success, action.output);
+});
+
+function cancelReset() {
+  pendingConfirmation = null;
+  updateAllButtons();
+}
+document.getElementById('cancel-reset').addEventListener('click', () => { confirmation.close(); cancelReset(); });
+confirmation.addEventListener('cancel', cancelReset);
+confirmation.addEventListener('close', cancelReset);
+
+exportHistory.addEventListener('click', () => {
+  if (exportHistory.disabled || pendingConfirmation) return;
+  return dataAction({ type: 'exportHistory' });
+});
+clearHistory.addEventListener('click', () => confirmReset(clearHistory, { type: 'clearHistory' },
+  'Delete EcoGuard history on this device? Settings, protections, learned delays and available restore records stay unchanged. Export history first if you want a copy.',
+  'History cleared. Other settings and protections were preserved.'));
+resetLearning.addEventListener('click', () => confirmReset(resetLearning, { type: 'resetLearning' },
+  'Clear all learned site delays? Your inactivity setting, protections and history stay unchanged. Future rapid restores can teach EcoGuard new delays.',
+  'Learned delays reset. Other settings and history were preserved.'));
+resetLocal.addEventListener('click', () => confirmReset(resetLocal, { type: 'resetLocalData' },
+  'Reset all EcoGuard data? This clears history, learned delays, tab protections and restore records, restores the 30-minute threshold and default protected sites, and pauses automatic unloading. Existing tabs and page edit flags stay unchanged. Export history first if you want a copy.',
+  'EcoGuard data reset to defaults. Automatic unloading is paused; resume when ready.'));
+resetEdits.addEventListener('click', () => confirmReset(resetEdits,
+  { type: 'resetPageEdits', tabId: management?.currentTab?.tabId, expectedUrl: management?.currentTab?.url },
+  `Clear edit protection for ${management?.currentTab?.hostname}? Save your work first. This does not save or erase page content. Further edits protect the page again. The five-minute interaction grace and all other safety checks still apply.`,
+  'Edit protection cleared. Interaction grace and all other protections still apply.', protectionFeedback));

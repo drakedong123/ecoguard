@@ -27,6 +27,7 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
   const selected = [];
   const focused = [];
   const removed = [];
+  const downloads = [];
   const errors = [];
   const alarms = new Map();
   const chrome = {
@@ -62,7 +63,8 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
       remove: async id => { removed.push(id); records.delete(id); chrome.tabs.onRemoved.emit(id); }
     },
     windows: { update: async (id, properties) => { focused.push({ id, properties }); return { id, ...properties }; } },
-    downloads: { onCreated: event(), onChanged: event(), search: async () => [] },
+    downloads: { onCreated: event(), onChanged: event(), search: async () => [],
+      download: async options => { downloads.push(structuredClone(options)); return downloads.length; } },
     alarms: { onAlarm: event(), get: async name => alarms.get(name),
       create: async (name, info) => { alarms.set(name, { name, ...info }); } },
     runtime: {
@@ -73,9 +75,10 @@ export function browser({ tabs = [tab(1)], clock = { at: 0 }, local = { settings
   const safe = target => ({ inspected: true, tabId: target.id, url: target.url,
     checkedAt: clock.at, lastInteractionAt: 0, edited: false, playingMedia: false,
     hasEmbeddedFrame: false, capturing: false, sharing: false });
-  const safety = probe ?? { inspect: async target => safe(target) };
+  const safety = probe ?? { inspect: async target => safe(target),
+    resetEdits: async target => ({ ...safe(target), reset: true, lastInteractionAt: clock.at }) };
   const worker = createBrowserWorker({ chrome, now: () => clock.at, probe: safety,
     onError: error => errors.push(error.message) });
-  return { chrome, records, discarded, selected, focused, removed, errors, alarms, clock, local, session,
+  return { chrome, records, discarded, selected, focused, removed, downloads, errors, alarms, clock, local, session,
     safe, safety, worker, alarm: () => chrome.alarms.onAlarm.emit({ name: SCAN_ALARM }) };
 }

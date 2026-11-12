@@ -128,3 +128,16 @@ Next: chunk 06 finishes site/tab protection UI, restore-last-unloaded, history e
 This is the first half requested by the user. Chunk 06 remains incomplete: history export, local data/learned-delay reset and confirmed edit reset belong to its second half. No additional permissions were added. Manual Chrome protection/restore/focus checks are documented in the README and remain pending; automated checks use simulated browser and popup surfaces.
 
 Verified on 12 November 2026 with `npm run verify`: all 119 tests passed (20 new tests), extension validation/packaging, native release build, app signature and CLI checks passed. Restore selection also preserves actual discard order when timestamps tie, including across worker restart. Real Chrome popup layout, protection, reload and window-focus behavior remain pending manual acceptance.
+
+### Fifth code milestone, second half — Chunk 06 implementation complete · 12 November 2026
+
+- [x] Export bounded, versioned history JSON through the worker using Chrome's save dialog and existing downloads permission. Include only export/application metadata and recorded event metadata; report initiation separately from completion and preserve history on cancellation/errors.
+- [x] Add separately confirmed history-only and learned-delay resets that preserve unrelated settings, protections and session restore records. New rapid restores can learn delays again.
+- [x] Add confirmed full local reset: restore default preferences, clear history/learning/tab exceptions/restore records, grant fresh grace and leave automatic unloading paused. Reset only named EcoGuard keys; leave tabs, page content/edit flags and existing export files untouched.
+- [x] Persist reset intent and pause before data changes; retry an interrupted full reset on a same-session worker restart before enabling scans.
+- [x] Inspect current-page safety on demand and expose edit/media/frame/capture protection explanations. Bind edit reset to the displayed tab/exact URL and literal confirmation; require a fresh successful probe response and final tab validation, then preserve interaction grace and independent protections.
+- [x] Add accessible modal confirmations with Cancel/Escape, duplicate-action guards, reset/preference-write coordination, useful error feedback and refreshed controls/counts after success or partial failure.
+
+Chunk 06 implementation is now complete. Real Chrome acceptance for popup layout/focus, save dialogs, download completion, trusted events, unload/restore and navigation remains pending in the README. No new permissions or production dependencies were introduced. Evaluation workloads/results, final verification and handoff remain later overall-project chunks.
+
+Verified on 12 November 2026 with `npm run verify`: all 140 tests passed (21 new tests), extension validation/packaging, native release build, app signature and CLI checks passed. Added coverage includes metadata-only/empty exports, cancellation/errors, strict reset confirmation, preserved data, interrupted-reset recovery, scan invalidation, real edit-reset transport/content-script behavior, stale page targets, popup Cancel/Escape and preference-write coordination. Tests use simulated browser/DOM surfaces and do not download files, clear the user's installed extension data or modify the user's tabs.

@@ -10,11 +10,15 @@ function node(disabled = false) {
     addEventListener(type, handler) { this.listeners[type] = handler; },
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; },
-    setAttribute(name, value) { this.attributes[name] = value; }
+    setAttribute(name, value) { this.attributes[name] = value; },
+    showModal() { this.open = true; },
+    close() { this.open = false; this.listeners.close?.(); }
   };
 }
 
-export async function popup(sendMessage, { managementStatus = async () => ({
+export async function popup(sendMessage, { status = async () => ({
+  ok: true, settings: { idleMinutes: 30 }, version: '0.1.0', paused: false
+}), managementStatus = async () => ({
   ok: true, currentTab: null, protectedHosts: [], restoreTarget: null
 }) } = {}) {
   const elements = new Map();
@@ -27,7 +31,7 @@ export async function popup(sendMessage, { managementStatus = async () => ({
     document: { getElementById: element, createElement: () => node() },
     chrome: { runtime: { sendMessage: async message => {
       requests.push(structuredClone(message));
-      if (message.type === 'status') return { ok: true, settings: { idleMinutes: 30 }, version: '0.1.0', paused: false };
+      if (message.type === 'status') return status();
       if (message.type === 'managementStatus') return managementStatus();
       return sendMessage(message);
     } } }

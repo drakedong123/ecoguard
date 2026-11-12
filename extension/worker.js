@@ -1,8 +1,8 @@
-import { createSettingsService, VERSION } from './settings.js';
+import { createSettingsService, DEFAULT_SETTINGS, normalizeSettings, VERSION } from './settings.js';
 import { createPageSafetyClient } from './page-probe.js';
 import { hostnameFromUrl, normalizeHostname, hostnameMatches } from './hostname.js';
 import { evaluateBasicEligibility, evaluateEligibility, pruneRecentActivations,
-  applyRestoreFeedback } from './policy.js';
+  applyRestoreFeedback, resetLearnedDelays, SAFETY_MAX_AGE_MS } from './policy.js';
 
 export const SCAN_ALARM = 'ecoguard-scan';
 export const SESSION_KEY = 'browserSession';
@@ -80,12 +80,35 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
       await chrome.alarms.create(SCAN_ALARM, { periodInMinutes: 1 });
     }
   }
+  async function completeLocalReset(tabs) {
+    const at = time();
+    session = { schemaVersion: 1, paused: true, resetPending: true,
+      tabs: {}, lastScanAt: null, discardSequence: 0 };
+    for (const tab of tabs) {
+      if (validId(tab.id) && tab.incognito === false) session.tabs[tab.id] = freshRecord(tab, at);
+    }
+    // Keep a durable reset intent until both storage areas reflect the reset.
+    await persist();
+    const defaults = normalizeSettings(DEFAULT_SETTINGS);
+    await chrome.storage.local.set({ settings: defaults, [HISTORY_KEY]: [] });
+    history = [];
+    session.resetPending = false;
+    await persist();
+    lastError = null;
+    return defaults;
+  }
   async function initialize() {
     const [stored, local, tabs] = await Promise.all([
       chrome.storage.session.get(SESSION_KEY), chrome.storage.local.get(HISTORY_KEY), chrome.tabs.query({})
     ]);
     const at = time();
     const raw = stored[SESSION_KEY];
+    if (raw?.resetPending === true) {
+      await completeLocalReset(tabs);
+      await ensureAlarm();
+      initialized = true;
+      return;
+    }
     const valid = raw?.schemaVersion === 1 && raw.tabs && typeof raw.tabs === 'object' &&
       !Array.isArray(raw.tabs) && typeof raw.paused === 'boolean';
     session = { schemaVersion: 1, paused: raw === undefined ? false : !valid || raw.paused,
@@ -318,8 +341,61 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
       const hostname = hostnameFromUrl(tab?.url);
       const currentTab = validId(tab?.id) && tab.incognito === false && hostname
         ? { tabId: tab.id, url: tab.url, hostname, protected: session.tabs[tab.id]?.protected === true,
-          matchingHosts: config.protectedHosts.filter(rule => hostnameMatches(hostname, rule)) } : null;
+          matchingHosts: config.protectedHosts.filter(rule => hostnameMatches(hostname, rule)),
+          safety: await safetyClient.inspect(tab) } : null;
       return { currentTab, protectedHosts: config.protectedHosts, restoreTarget: await restoreTarget() };
+    }),
+    exportHistory: () => run(async () => {
+      const exportedAt = new Date(time()).toISOString();
+      const events = restoreHistory(history, time());
+      const payload = { schemaVersion: 1, application: 'EcoGuard', version: VERSION, exportedAt, events };
+      const filename = `EcoGuard-history-${exportedAt.replace(/[:.]/g, '-')}.json`;
+      const downloadId = await chrome.downloads.download({
+        url: `data:application/json;charset=utf-8,${encodeURIComponent(JSON.stringify(payload, null, 2))}`,
+        filename, saveAs: true
+      });
+      if (!validId(downloadId)) throw new Error('Chrome did not start the history export. Try again.');
+      return { downloadId, eventCount: events.length };
+    }),
+    clearHistory: confirmed => run(async () => {
+      if (confirmed !== true) throw new Error('Confirm before clearing history.');
+      await chrome.storage.local.set({ [HISTORY_KEY]: [] });
+      history = [];
+      return { historyCount: 0 };
+    }),
+    resetLearning: confirmed => run(async () => {
+      if (confirmed !== true) throw new Error('Confirm before resetting learned delays.');
+      return { settings: await settings.update(resetLearnedDelays), version: VERSION };
+    }),
+    resetLocalData: confirmed => run(async () => {
+      if (confirmed !== true) throw new Error('Confirm before resetting EcoGuard data.');
+      session.paused = true;
+      session.resetPending = true;
+      await persist();
+      const defaults = await completeLocalReset(await chrome.tabs.query({}));
+      return { settings: defaults, version: VERSION, paused: true, historyCount: 0 };
+    }),
+    resetPageEdits: (id, expectedUrl, confirmed) => run(async () => {
+      if (confirmed !== true) throw new Error('Save your work and confirm before clearing edit protection.');
+      if (!validId(id) || !hostnameFromUrl(expectedUrl)) throw new Error('Invalid edit reset request.');
+      const tab = await getTab(id);
+      if (tab?.id !== id || tab.incognito !== false || tab.url !== expectedUrl || tab.discarded !== false) {
+        throw new Error('This tab changed or is unavailable. Reopen the popup and try again.');
+      }
+      const safety = await safetyClient.resetEdits(tab, { confirmed: true });
+      if (safety?.inspected !== true || safety.reset !== true || safety.edited !== false ||
+          safety.tabId !== id || safety.url !== expectedUrl || !validTime(safety.checkedAt, time()) ||
+          time() - safety.checkedAt > SAFETY_MAX_AGE_MS || !validTime(safety.lastInteractionAt, time())) {
+        throw new Error('Could not confirm clearing edit protection. Refresh the page and reopen EcoGuard.');
+      }
+      const current = await getTab(id);
+      if (current?.url !== expectedUrl || current.id !== id || current.incognito !== false) {
+        throw new Error('The page changed during the reset. Reopen the popup to check its protection.');
+      }
+      await observe(current);
+      session.tabs[id].lastInteractionAt = time();
+      await persist();
+      return { reset: true };
     }),
     setTabProtection: (id, protectedTab, expectedUrl) => run(async () => {
       if (!validId(id) || typeof protectedTab !== 'boolean' || !hostnameFromUrl(expectedUrl)) {

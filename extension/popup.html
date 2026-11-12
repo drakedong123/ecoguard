@@ -28,6 +28,8 @@
       </div>
       <p class="hint">Tab protection lasts for this browser session. Site protection is saved and includes subdomains. Both prevent automatic unloading.</p>
       <p id="protection-state" class="hint"></p>
+      <p id="edit-state" class="hint">Checking page edit protection…</p>
+      <button id="reset-edits" type="button" disabled>Clear edit protection…</button>
       <details>
         <summary>Manage protected sites</summary>
         <ul id="protected-sites" aria-label="Protected sites"></ul>
@@ -46,7 +48,30 @@
       <button id="close-unloaded" type="button" disabled>Close unloaded tabs (0)</button>
       <p id="unloaded-feedback" role="status" aria-live="polite">Checking unloaded tabs…</p>
     </section>
+    <section class="management" aria-labelledby="data-heading">
+      <h2 id="data-heading">Your local data</h2>
+      <p id="data-summary" class="hint">Checking history and learned delays…</p>
+      <button id="export-history" type="button" disabled>Export history as JSON</button>
+      <p class="hint">Includes timestamps, tab IDs, hostnames, actions and reasons. No full URLs, titles or page content.</p>
+      <details>
+        <summary>Reset local data</summary>
+        <div class="controls reset-controls">
+          <button id="clear-history" type="button" disabled>Clear history…</button>
+          <button id="reset-learning" type="button" disabled>Reset learned delays…</button>
+          <button id="reset-local" type="button" disabled>Reset all EcoGuard data…</button>
+        </div>
+      </details>
+      <p id="data-feedback" role="status" aria-live="polite"></p>
+    </section>
   </main>
+  <dialog id="confirmation" aria-labelledby="confirmation-heading" aria-describedby="confirmation-text">
+    <h2 id="confirmation-heading">Confirm reset</h2>
+    <p id="confirmation-text"></p>
+    <div class="controls">
+      <button id="cancel-reset" type="button" autofocus>Cancel</button>
+      <button id="confirm-reset" type="button">Confirm reset</button>
+    </div>
+  </dialog>
   <footer>Page safety stays local. Tabs close only when you click.</footer>
   <script type="module" src="popup.js"></script>
 </body>
