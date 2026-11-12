@@ -1,8 +1,9 @@
-import { createSettingsService, VERSION } from './settings.js';
 import { createUnloadedTabsService } from './unloaded-tabs.js';
+import { createBrowserWorker } from './worker.js';
 
-const settings = createSettingsService(chrome.storage.local);
 const unloadedTabs = createUnloadedTabsService(chrome.tabs);
+const worker = createBrowserWorker({ chrome });
+worker.start().catch(error => console.warn('EcoGuard initialization:', error.message));
 
 // Register synchronously so the popup can wake a newly started MV3 worker.
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
@@ -11,13 +12,15 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
 
   let operation;
   if (message?.type === 'status') {
-    operation = settings.read().then(value => ({ settings: value, version: VERSION, cleanupAvailable: false }));
+    operation = worker.status();
   } else if (message?.type === 'saveSettings') {
-    operation = settings.save(message.idleMinutes).then(value => ({ settings: value, version: VERSION }));
+    operation = worker.saveSettings(message.idleMinutes);
+  } else if (message?.type === 'setPaused') {
+    operation = worker.setPaused(message.paused);
   } else if (message?.type === 'unloadedTabsStatus') {
-    operation = unloadedTabs.list().then(tabIds => ({ tabIds }));
+    operation = worker.run(() => unloadedTabs.list().then(tabIds => ({ tabIds })));
   } else if (message?.type === 'closeUnloadedTabs') {
-    operation = unloadedTabs.close(message.tabIds);
+    operation = worker.run(() => unloadedTabs.close(message.tabIds));
   }
   else { reply({ ok: false, error: 'Unsupported EcoGuard request.' }); return false; }
 

@@ -11,7 +11,8 @@ export async function checkExtension() {
   const manifest = JSON.parse(await readFile(path.join(extension, 'manifest.json'), 'utf8'));
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.background.type, 'module');
-  assert.deepEqual(manifest.permissions, ['storage'], 'Worker permissions belong to chunk 05');
+  assert.deepEqual(manifest.permissions, ['storage', 'tabs', 'alarms', 'downloads'],
+    'Worker needs tab state, alarm scheduling, local/session storage and a download veto');
   assert.equal(manifest.host_permissions, undefined);
   assert.deepEqual(manifest.content_scripts, [{
     matches: ['http://*/*', 'https://*/*'], js: ['page-safety.js'],

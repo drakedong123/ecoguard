@@ -9,13 +9,14 @@
 <body>
   <header><span class="mark" aria-hidden="true">e</span><div><h1>EcoGuard</h1><p>Browser resource manager</p></div></header>
   <main>
-    <p class="version">Foundation build <span id="version">0.1.0</span></p>
-    <h2>Your workspace starts here.</h2>
-    <p>Local settings and page safety tracking are ready. Automatic tab cleanup will arrive in a later milestone.</p>
+    <p class="version">EcoGuard <span id="version">0.1.0</span></p>
+    <h2>Keep your workspace lighter.</h2>
+    <p>Eligible idle tabs unload automatically and stay in the tab bar. Select an unloaded tab to reload it.</p>
+    <button id="pause" type="button" disabled>Pause automatic unloading</button>
     <form id="settings">
       <label for="idle">Inactivity threshold in minutes</label>
       <div class="field"><input id="idle" type="number" min="5" max="1440" step="1" value="30" required disabled><button id="save" disabled>Save preference</button></div>
-      <p class="hint">5–1440 minutes. Saved locally for the future cleanup engine.</p>
+      <p class="hint">5–1440 minutes. New and recently active tabs get a full inactivity grace period.</p>
     </form>
     <p id="feedback" role="status" aria-live="polite">Connecting to EcoGuard…</p>
     <section class="unloaded" aria-labelledby="unloaded-heading">

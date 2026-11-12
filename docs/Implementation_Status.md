@@ -95,3 +95,23 @@ Next: chunk 05 connects the policy and probe to browser lifecycle events, alarms
 User-requested addition, implemented ahead of the remaining chunk 06 controls. The popup displays **Close unloaded tabs (N)** and closes its displayed selection only on an explicit click, without another prompt. The scope includes tabs discarded by Chrome across browser windows. Active, pinned and private tabs are excluded; final lookups skip restored, changed or unavailable tabs. Newly discarded tabs outside the displayed selection are not included. Individual removal failures do not stop the batch; the popup reports closed/skipped/failed counts and refreshes the available count. No additional permissions or automatic actions were added.
 
 Verified with 74 passing tests and `npm run build:extension` (manifest, assets, syntax and packaging). Ten new tests cover service selection, state changes, failures, popup behavior and worker sender validation/routing. These use simulated browser and popup surfaces. Real Chrome checks in the README remain pending. Chrome offers no atomic conditional removal, so a state change after the final lookup can still race with closing. Chunk 05 and the remaining chunk 06 functionality are still pending.
+
+### Fourth code milestone — Chunk 05 complete · 12 November 2026
+
+- [x] Add `extension/worker.js` with synchronous lifecycle listener registration and one queue for scans, events, preferences, pause, feedback and manual close operations.
+- [x] Register a named one-minute Chrome alarm, repair missing alarms during initialization/startup/install, and coalesce duplicate pending scans without a polling timer or worker keepalive.
+- [x] Persist validated tab observations, activation windows, session tab protection, pause and confirmed discard records in `chrome.storage.session`; give fresh observations, navigation/replacement and new browser sessions full inactivity grace.
+- [x] Refresh inactivity when switching away from a previously active tab; retain frequent-use history and remove closed/replaced IDs.
+- [x] Rank by longest inactivity, attempt at most two discards per scan, require two successful safety probes, and recheck downloads plus live tab state immediately before discard.
+- [x] Invalidate scans synchronously when browser/download events or popup mutations arrive, including events queued before scan execution begins.
+- [x] Fail closed on failed/unknown download and page checks, mismatched/future/stale observations and storage failures; reload durable state before retry after unexpected errors.
+- [x] Count success only when the browser response confirms the same URL and tab as discarded. Record failed/unconfirmed outcomes separately and stop the batch on persistence failures.
+- [x] Consume confirmed restore feedback at most once, persist doubled hostname delays up to 24 hours and keep local history bounded at 500 metadata-only events.
+- [x] Add `tabs`, `alarms` and `downloads` permissions; preserve existing content-script access and update manifest validation/packaging.
+- [x] Add basic popup pause/resume alongside existing inactivity and explicit close controls; update automatic-unloading descriptions and document real-browser acceptance.
+
+Verified on 12 November 2026 with `npm run verify`: all 99 tests passed (25 additions since the manual-close milestone), extension validation/packaging, native release build, app signature and CLI checks passed. Worker tests cover restart/new-session recovery, concurrent events, coalesced scans, tab changes, download vetoes, protected fixtures, final revalidation, failed discards, storage recovery and consumed rapid-restore feedback. The real worker/transport/content-script integration test uses simulated DOM and browser surfaces; no user's tabs were changed by tests.
+
+Actual Chrome permission prompts, trusted-event delivery, unload/restore behavior, service-worker shutdown and alarm timing remain pending manual acceptance in the README. Chrome does not provide an atomic conditional discard, so a state change after final validation remains a narrow race. Cross-storage crash recovery favors at-most-once feedback: consumption can succeed before a failed preference write, losing one adjustment. Pause is session-scoped and clears on browser restart/extension reload; history and learned settings remain local. Exact URLs appear only in session observations, never history.
+
+Next: chunk 06 finishes site/tab protection UI, restore-last-unloaded, history export, local data reset and confirmed edit reset. Automatic unloading now runs; automatic closing does not. Native resource monitoring and actions remain in later chunks.

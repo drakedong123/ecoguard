@@ -26,6 +26,12 @@ export function createSettingsService(storage) {
     return result;
   };
   return {
+    update: updater => serial(async () => {
+      const saved = await storage.get('settings');
+      const value = normalizeSettings(updater(normalizeSettings(saved.settings)));
+      await storage.set({ settings: value });
+      return value;
+    }),
     read: () => serial(async () => {
       const saved = await storage.get('settings');
       return normalizeSettings(saved.settings);

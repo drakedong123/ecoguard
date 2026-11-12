@@ -2,6 +2,8 @@ const form = document.getElementById('settings');
 const idle = document.getElementById('idle');
 const save = document.getElementById('save');
 const feedback = document.getElementById('feedback');
+const pause = document.getElementById('pause');
+let paused = false;
 const closeUnloaded = document.getElementById('close-unloaded');
 const unloadedFeedback = document.getElementById('unloaded-feedback');
 let unloadedTabIds = [];
@@ -25,9 +27,26 @@ form.addEventListener('submit', async event => {
   finally { save.disabled = false; }
 });
 
-request({ type: 'status' }).then(() => {
+function showPauseState(value) {
+  paused = value;
+  pause.textContent = paused ? 'Resume automatic unloading' : 'Pause automatic unloading';
+  feedback.textContent = paused ? 'Automatic unloading is paused for this browser session.'
+    : 'Automatic unloading is on. Safety checks run about once a minute.';
+}
+
+pause.addEventListener('click', async () => {
+  if (pause.disabled) return;
+  pause.disabled = true;
+  try { showPauseState((await request({ type: 'setPaused', paused: !paused })).paused); }
+  catch (error) { feedback.textContent = error.message; }
+  finally { pause.disabled = false; }
+});
+
+request({ type: 'status' }).then(response => {
   idle.disabled = false; save.disabled = false;
-  feedback.textContent = 'Ready. Automatic cleanup is not enabled in this build.';
+  showPauseState(response.paused === true);
+  pause.disabled = false;
+  if (response.lastError) feedback.textContent += ` Last worker error: ${response.lastError}`;
 }).catch(error => { feedback.textContent = error.message; });
 
 async function refreshUnloadedTabs() {

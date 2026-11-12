@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import { createUnloadedTabsService } from '../unloaded-tabs.js';
-import { createSettingsService, VERSION } from '../settings.js';
+import { createBrowserWorker } from '../worker.js';
+import { browser as workerBrowser } from './helpers/browser.js';
 
 const tab = (id, fields = {}) => ({ id, discarded: true, active: false, pinned: false, incognito: false, ...fields });
 
@@ -12,7 +13,7 @@ function browser(initial) {
   const removed = [];
   const tabs = {
     query: async query => {
-      assert.deepEqual(query, { discarded: true });
+      assert.ok(query.discarded === true || Object.keys(query).length === 0);
       return [...records.values()];
     },
     get: async id => {
@@ -94,7 +95,7 @@ async function popup(sendMessage) {
     document: { getElementById: element },
     chrome: { runtime: { sendMessage: async message => {
       requests.push(structuredClone(message));
-      if (message.type === 'status') return { ok: true, settings: { idleMinutes: 30 }, version: '0.1.0' };
+      if (message.type === 'status') return { ok: true, settings: { idleMinutes: 30 }, version: '0.1.0', paused: false };
       return sendMessage(message);
     } } }
   });
@@ -151,21 +152,39 @@ test('popup blocks repeated clicks while closing and reports failures without lo
   assert.equal(button.disabled, false);
 });
 
+test('popup pause/resume reflects confirmed worker state and reports rejected changes', async () => {
+  let fail = false;
+  const p = await popup(async message => {
+    if (message.type === 'unloadedTabsStatus') return { ok: true, tabIds: [] };
+    if (fail) return { ok: false, error: 'Pause could not be saved' };
+    return { ok: true, paused: message.paused };
+  });
+  const pause = p.element('pause');
+  assert.equal(pause.textContent, 'Pause automatic unloading');
+  await pause.listeners.click();
+  assert.equal(pause.textContent, 'Resume automatic unloading');
+  assert.match(p.element('feedback').textContent, /paused/);
+  fail = true;
+  await pause.listeners.click();
+  assert.equal(pause.textContent, 'Resume automatic unloading');
+  assert.match(p.element('feedback').textContent, /Pause could not be saved/);
+  fail = false;
+  await pause.listeners.click();
+  assert.equal(pause.textContent, 'Pause automatic unloading');
+  assert.equal(pause.disabled, false);
+});
+
 const workerScript = (await readFile(new URL('../background.js', import.meta.url), 'utf8'))
   .replace(/^import .*;\n/gm, '');
 
 function worker(tabs) {
   let listener;
   const popupSender = { id: 'ecoguard', url: 'chrome-extension://ecoguard/popup.html' };
+  const chrome = workerBrowser({ tabs: [], local: {} }).chrome;
+  Object.assign(chrome.tabs, tabs);
+  chrome.runtime.onMessage.addListener = callback => { listener = callback; };
   vm.runInNewContext(workerScript, {
-    createSettingsService, VERSION, createUnloadedTabsService,
-    chrome: {
-      tabs, storage: { local: { get: async () => ({}), set: async () => {} } },
-      runtime: {
-        id: 'ecoguard', getURL: path => `chrome-extension://ecoguard/${path}`,
-        onMessage: { addListener: callback => { listener = callback; } }
-      }
-    }
+    createBrowserWorker, createUnloadedTabsService, chrome, console: { warn: () => {} }
   });
   return {
     send: (message, sender = popupSender) => new Promise(resolve => {
