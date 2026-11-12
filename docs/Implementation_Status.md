@@ -89,3 +89,9 @@ Muted playing media and any attached media provider are protected. `capturing` a
 Verified on 11 November 2026 with `npm run verify`: all 64 tests passed, including 20 new page safety/transport tests; extension validation and packaging, native release build, app signature and CLI checks passed. Tests execute the content script with supplied DOM/event and message surfaces; they do not establish real Chrome permission prompts, trusted-event delivery or navigation behavior. Real Chrome and native GUI acceptance remain pending.
 
 Next: chunk 05 connects the policy and probe to browser lifecycle events, alarms, serialized scans, session persistence, download checks, final revalidation and confirmed tab unloading. No automatic unloading is enabled in chunk 04.
+
+### Manual close-unloaded-tabs control — 12 November 2026
+
+User-requested addition, implemented ahead of the remaining chunk 06 controls. The popup displays **Close unloaded tabs (N)** and closes its displayed selection only on an explicit click, without another prompt. The scope includes tabs discarded by Chrome across browser windows. Active, pinned and private tabs are excluded; final lookups skip restored, changed or unavailable tabs. Newly discarded tabs outside the displayed selection are not included. Individual removal failures do not stop the batch; the popup reports closed/skipped/failed counts and refreshes the available count. No additional permissions or automatic actions were added.
+
+Verified with 74 passing tests and `npm run build:extension` (manifest, assets, syntax and packaging). Ten new tests cover service selection, state changes, failures, popup behavior and worker sender validation/routing. These use simulated browser and popup surfaces. Real Chrome checks in the README remain pending. Chrome offers no atomic conditional removal, so a state change after the final lookup can still race with closing. Chunk 05 and the remaining chunk 06 functionality are still pending.

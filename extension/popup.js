@@ -2,12 +2,15 @@ const form = document.getElementById('settings');
 const idle = document.getElementById('idle');
 const save = document.getElementById('save');
 const feedback = document.getElementById('feedback');
+const closeUnloaded = document.getElementById('close-unloaded');
+const unloadedFeedback = document.getElementById('unloaded-feedback');
+let unloadedTabIds = [];
 
 async function request(message) {
   const response = await chrome.runtime.sendMessage(message);
   if (!response?.ok) throw new Error(response?.error ?? 'EcoGuard did not respond. Reload the extension.');
-  idle.value = response.settings.idleMinutes;
-  document.getElementById('version').textContent = response.version;
+  if (response.settings) idle.value = response.settings.idleMinutes;
+  if (response.version) document.getElementById('version').textContent = response.version;
   return response;
 }
 
@@ -26,3 +29,36 @@ request({ type: 'status' }).then(() => {
   idle.disabled = false; save.disabled = false;
   feedback.textContent = 'Ready. Automatic cleanup is not enabled in this build.';
 }).catch(error => { feedback.textContent = error.message; });
+
+async function refreshUnloadedTabs() {
+  closeUnloaded.disabled = true;
+  unloadedTabIds = [];
+  closeUnloaded.textContent = 'Close unloaded tabs (0)';
+  const response = await request({ type: 'unloadedTabsStatus' });
+  unloadedTabIds = response.tabIds;
+  closeUnloaded.textContent = `Close unloaded tabs (${unloadedTabIds.length})`;
+  closeUnloaded.disabled = unloadedTabIds.length === 0;
+  return unloadedTabIds.length;
+}
+
+closeUnloaded.addEventListener('click', async () => {
+  if (closeUnloaded.disabled || unloadedTabIds.length === 0) return;
+  closeUnloaded.disabled = true;
+  unloadedFeedback.textContent = 'Closing unloaded tabs…';
+  let summary;
+  try {
+    const result = await request({ type: 'closeUnloadedTabs', tabIds: unloadedTabIds });
+    summary = `Closed ${result.closed} unloaded tab${result.closed === 1 ? '' : 's'}.`;
+    if (result.skipped) summary += ` Skipped ${result.skipped} changed or unavailable tab${result.skipped === 1 ? '' : 's'}.`;
+    if (result.failed) summary += ` Could not close ${result.failed} tab${result.failed === 1 ? '' : 's'}; try again.`;
+  } catch (error) { summary = error.message; }
+  unloadedFeedback.textContent = summary;
+  try { await refreshUnloadedTabs(); }
+  catch (error) { unloadedFeedback.textContent = `${summary} Could not refresh the count: ${error.message}`; }
+});
+
+refreshUnloadedTabs().then(count => {
+  unloadedFeedback.textContent = count === 0
+    ? 'No unloaded tabs available to close.'
+    : `${count} unloaded tab${count === 1 ? '' : 's'} available to close.`;
+}).catch(error => { unloadedFeedback.textContent = error.message; });

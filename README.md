@@ -42,6 +42,9 @@ The app uses a local ad hoc signature. It is intended for development on the Mac
 2. Enable Developer mode, choose Load unpacked and select `build/extension`.
 3. Open EcoGuard from the browser's extension menu.
 4. Save an inactivity threshold from 5 to 1440 minutes. Reopen the popup to verify it persisted.
+5. The **Close unloaded tabs (N)** button closes the displayed selection of unloaded tabs across all browser windows, including tabs unloaded by Chrome itself. It is disabled when none are available. Active, pinned and private tabs are kept; tabs restored since opening the popup are skipped. Closing runs only when clicked, without an additional prompt, and the popup reports successes, skips and failures.
+
+For a manual check, open a disposable background tab and discard it using `chrome://discards`. Reopen EcoGuard and check that the count increases. Click **Close unloaded tabs** and verify that the tab disappears while loaded and pinned tabs remain. Also test restoring or pinning a discarded tab in another window before clicking; it must be skipped. The action reads the browser's discarded state and uses the [Chrome Tabs API](https://developer.chrome.com/docs/extensions/reference/api/tabs#method-remove), without requesting additional permissions. Chrome does not provide an atomic conditional close, so a state change between the final lookup and removal remains a narrow race.
 
 The extension requests local storage and content-script access to HTTP/HTTPS pages for safety tracking. Reload the extension and refresh existing pages after updating: tracking must begin at document load. Chrome may show a new site-access permission prompt. The probe retains only an edited flag and an interaction timestamp in each page; inspection returns safety flags on request without collecting typed text or field values. No scheduled inspections or tab unloading run yet.
 

@@ -18,8 +18,14 @@
       <p class="hint">5–1440 minutes. Saved locally for the future cleanup engine.</p>
     </form>
     <p id="feedback" role="status" aria-live="polite">Connecting to EcoGuard…</p>
+    <section class="unloaded" aria-labelledby="unloaded-heading">
+      <h2 id="unloaded-heading">Close unloaded tabs</h2>
+      <p class="hint">Remove unloaded tabs from the tab bar across all windows, including tabs unloaded by Chrome. Active and pinned tabs are kept.</p>
+      <button id="close-unloaded" type="button" disabled>Close unloaded tabs (0)</button>
+      <p id="unloaded-feedback" role="status" aria-live="polite">Checking unloaded tabs…</p>
+    </section>
   </main>
-  <footer>Page safety stays local. No tabs unloaded or closed.</footer>
+  <footer>Page safety stays local. Tabs close only when you click.</footer>
   <script type="module" src="popup.js"></script>
 </body>
 </html>

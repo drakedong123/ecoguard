@@ -41,7 +41,7 @@ The implementation uses tab unloading and controlled desktop actions. It never d
 
 **EG-07 Activity tracking and session recovery.** Track tab activity automatically across extension worker restarts. Implementation: chunks 04–05. Acceptance: stopping and restarting the service worker preserves session observations, while a new browser session grants fresh inactivity grace.
 
-**EG-08 Unload without closing.** Use browser-native tab discarding. Implementation: chunk 05. Acceptance: an EcoGuard action leaves the tab in the strip and selecting it triggers normal browser reload. A failed discard does not count as a successful intervention.
+**EG-08 Unload without closing.** Use browser-native tab discarding. Implementation: chunk 05. Acceptance: automatic cleanup leaves the tab in the strip and selecting it triggers normal browser reload. A failed discard does not count as a successful intervention. User-requested addition on 12 November 2026: a separate manual button closes the displayed selection of still-unloaded tabs across windows, including Chrome-discarded tabs, while keeping active/pinned/private tabs.
 
 **EG-09 Protected browser work.** Exclude active, pinned, audible, edited, recently used and otherwise uncertain pages. Implementation: chunks 03–05. Acceptance: protected fixtures receive zero EcoGuard discard calls, including after a final state change just before intervention.
 
