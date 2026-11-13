@@ -259,6 +259,59 @@ test('failed and unconfirmed discard responses never create confirmed records or
   }
 });
 
+test('Chrome discard replacements retain confirmed restore records and learn once after restart', async () => {
+  const b = browser();
+  await b.worker.start();
+  b.clock.at = 6 * MINUTE;
+  b.chrome.tabs.discard = async id => {
+    const replacement = { ...b.records.get(id), id: 9, discarded: true, status: 'unloaded' };
+    b.records.delete(id); b.records.set(9, replacement);
+    b.chrome.tabs.onReplaced.emit(9, id);
+    return structuredClone(replacement);
+  };
+  assert.equal((await b.worker.scan()).discarded, 1);
+  await b.worker.settled();
+  assert.equal(b.session[SESSION_KEY].tabs[1], undefined);
+  assert.equal(b.session[SESSION_KEY].tabs[9].discard.tabId, 9);
+  assert.equal(b.local[HISTORY_KEY][0].tabId, 9);
+  assert.equal(b.local[HISTORY_KEY][0].action, 'discarded');
+  const restarted = browser({ tabs: [...b.records.values()], session: b.session, local: b.local, clock: b.clock });
+  await restarted.worker.start();
+  const target = (await restarted.worker.managementStatus()).restoreTarget;
+  assert.equal(target.tabId, 9);
+  await restarted.worker.restoreLastUnloaded(target);
+  await restarted.worker.settled();
+  assert.equal(restarted.local.settings.learnedHostDelays[0].idleMinutes, 10);
+  assert.equal(restarted.session[SESSION_KEY].tabs[9].discard, undefined);
+});
+
+test('a different discard response ID requires the exact Chrome replacement event and matching live page', async () => {
+  for (const mode of ['no-event', 'unrelated-event', 'changed-url', 'wrong-window']) {
+    const b = browser(); await b.worker.start(); b.clock.at = 6 * MINUTE;
+    b.chrome.tabs.discard = async () => {
+      const replacement = tab(9, { url: tab(1).url, discarded: true });
+      b.records.set(9, { ...replacement,
+        ...(mode === 'changed-url' ? { url: 'https://other.example/' } : {}),
+        ...(mode === 'wrong-window' ? { windowId: 2 } : {}) });
+      if (mode !== 'no-event') b.chrome.tabs.onReplaced.emit(9, mode === 'unrelated-event' ? 2 : 1);
+      return replacement;
+    };
+    assert.equal((await b.worker.scan()).discarded, 0, mode);
+    assert.ok(!b.local[HISTORY_KEY].some(event => event.action === 'discarded'), mode);
+  }
+});
+
+test('tab protection follows Chrome replacement while ordinary replacement receives fresh grace', async () => {
+  const b = browser(); await b.worker.start();
+  await b.worker.setTabProtection(1, true, tab(1).url);
+  b.clock.at = 6 * MINUTE;
+  b.records.delete(1); b.records.set(9, tab(9));
+  b.chrome.tabs.onReplaced.emit(9, 1); await b.worker.settled();
+  assert.equal(b.session[SESSION_KEY].tabs[1], undefined);
+  assert.equal(b.session[SESSION_KEY].tabs[9].protected, true);
+  assert.equal(b.session[SESSION_KEY].tabs[9].lastActiveAt, b.clock.at);
+});
+
 test('rapid restore feedback is applied once, including delayed loading after activation and restart', async () => {
   const b = browser();
   await b.worker.start();

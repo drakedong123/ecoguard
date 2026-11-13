@@ -21,7 +21,7 @@ The requirements below have been traced to the design. Their acceptance checks r
 
 **EG-01 Resource management with little user attention.** Build a browser extension and a quiet desktop manager for unused resources. Implementation: chunks 05, 07–10. Acceptance: the components observe activity without a persistent dashboard, and interventions appear in a bounded local history.
 
-The implementation uses tab unloading and controlled desktop actions. It never deletes tabs, force quits applications or automatically closes applications.
+The implementation uses tab unloading and controlled desktop actions. Automatic management never closes tabs, force quits applications or automatically closes applications. A separate user-requested button explicitly closes selected unloaded tabs.
 
 ## Slide 2 Motivation
 

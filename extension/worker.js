@@ -66,6 +66,7 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
   let revision = 0;
   let tail = Promise.resolve();
   let pendingScan;
+  let discardAttempt;
   let lastError = null;
 
   const time = () => {
@@ -248,20 +249,38 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
       if (!decision.eligible) continue;
       result.attempted++;
       let discarded;
-      try { discarded = await chrome.tabs.discard(tab.id); }
+      const attempt = { currentId: tab.id };
+      discardAttempt = attempt;
+      try {
+        discarded = await chrome.tabs.discard(tab.id);
+        // Recent Chrome builds replace WebContents (and the tab ID) while
+        // discarding. Yield for that event and validate the returned live tab.
+        if (validId(discarded?.id) && discarded.id !== tab.id) {
+          const current = await getTab(discarded.id);
+          if (current?.id !== discarded.id || current.url !== finalTab.url ||
+              current.discarded !== true || current.incognito !== false ||
+              current.windowId !== finalTab.windowId) discarded = undefined;
+        }
+      }
       catch {
         await appendHistory(finalTab, 'discard-failed', 'browser-rejected');
         continue;
+      } finally {
+        discardAttempt = undefined;
       }
-      if (discarded?.id !== tab.id || discarded.discarded !== true ||
+      if (discarded?.id !== attempt.currentId || discarded.discarded !== true ||
           discarded.url !== finalTab.url) {
         await appendHistory(finalTab, 'discard-unconfirmed', 'unconfirmed-result');
         continue;
       }
-      activity.discard = { confirmed: true, tabId: tab.id,
+      if (discarded.id !== tab.id) {
+        delete session.tabs[tab.id];
+        session.tabs[discarded.id] = activity;
+      }
+      activity.discard = { confirmed: true, tabId: discarded.id,
         hostname: decision.hostname, discardedAt: time(), sequence: ++session.discardSequence };
       await persist();
-      await appendHistory(finalTab, 'discarded', 'eligible');
+      await appendHistory(discarded, 'discarded', 'eligible');
       result.discarded++;
     }
     lastError = null;
@@ -306,12 +325,23 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
       chrome.tabs.onRemoved.addListener(id => dispatch(async () => {
         delete session.tabs[id]; await persist();
       }));
-      chrome.tabs.onReplaced.addListener((addedId, removedId) => dispatch(async () => {
-        delete session.tabs[removedId];
-        const tab = await getTab(addedId);
-        if (tab) await observe(tab, { navigation: true });
-        await persist();
-      }));
+      chrome.tabs.onReplaced.addListener((addedId, removedId) => {
+        // Correlate synchronously while the discard API is pending; never accept
+        // an unrelated returned ID just because its URL happens to match.
+        if (discardAttempt?.currentId === removedId) discardAttempt.currentId = addedId;
+        dispatch(async () => {
+          const protectedTab = session.tabs[removedId]?.protected === true || session.tabs[addedId]?.protected === true;
+          delete session.tabs[removedId];
+          const tab = await getTab(addedId);
+          if (tab) {
+            const confirmed = session.tabs[addedId]?.discard;
+            await observe(tab, { navigation: !(confirmed?.confirmed && confirmed.tabId === addedId &&
+              session.tabs[addedId].url === tab.url) });
+            if (session.tabs[addedId]) session.tabs[addedId].protected = protectedTab;
+          }
+          await persist();
+        });
+      });
       // Download events cancel any scan already awaiting an API response.
       chrome.downloads.onCreated.addListener(() => dispatch(async () => {}));
       chrome.downloads.onChanged.addListener(() => dispatch(async () => {}));

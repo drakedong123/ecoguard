@@ -1,5 +1,19 @@
 # EcoGuard Implementation Status
 
+## Browser completion — 13 November 2026
+
+Browser implementation, repeatable automated real-Chrome acceptance, offline fixtures, evaluation tooling and local release packaging are complete. Native milestones remain separate.
+
+- Fixed a real Chrome 157 integration bug: discarding can replace the tab ID. The worker now correlates Chrome's explicit `onReplaced` event with its pending discard, validates the replacement's live URL/window/private/discarded state and retains confirmed history/restore/learning on the replacement ID. Unrelated returned IDs remain unconfirmed. Tab protection follows replacement events.
+- All 146 automated tests pass, including replacement confirmation, rejection of unrelated/mismatched replacements, restore feedback after worker restart and fixture/benchmark validation.
+- All 16 real-Chrome acceptance checks pass against the production package in disposable profiles. The run uses the actual five-minute threshold and one-minute alarms; zero unwanted unloads across eight protected fixtures and no automatic tab-count reduction were observed. It covers a real download veto, restore/learning, trusted edits, popup confirmation focus/Escape, completed metadata-only export, reset scopes, manual closing and browser restart.
+- Added zero-dependency loopback fixtures and a three-pair alternating browser benchmark with raw observations, metadata/raw-sample validation, null preservation and treatment-minus-baseline summaries. Three short smoke pairs passed. A full 72-minute resource study and battery/energy claims are not part of this verification record.
+- Added extension-only verification, deterministic ZIP/checksum packaging and a standalone installation/update/troubleshooting/removal guide. See `browser/README.md` and `browser/ACCEPTANCE.md`.
+
+Native Save/Cancel picker interaction remains unverified. Automatic approval review blocked native Chrome UI inspection because it selected a window containing unrelated private browsing. No UI action was taken in that window. The guided `npm run test:browser:picker` command uses a disposable profile and checks cancellation/history preservation plus a completed empty export when an operator handles the dialogs. The automated headless suite separately verifies a completed nonempty export with download behavior redirected to its output directory. Permission-prompt appearance and other Chromium versions also remain supplementary headed/platform checks.
+
+The dated milestones below are historical records; their earlier pending-browser notes are superseded by this browser completion record where covered by the acceptance evidence.
+
 ## First code milestone
 
 Repository and build foundation, corresponding to chunk 02 in the local design. Chunk 01 covered the design document and source traceability.

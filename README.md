@@ -1,6 +1,6 @@
 # EcoGuard
 
-EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The browser extension automatically unloads eligible idle tabs using page safety checks, session activity tracking and alarm-based scheduling (chunks 03–05). Its popup provides an inactivity threshold, pause/resume, tab/site protection, restore-last-unloaded, manual close-unloaded-tabs, history export and confirmed reset controls. Chunk 06 implementation is complete; real Chrome acceptance remains pending. Native resource monitoring and desktop process actions belong to later milestones.
+EcoGuard is a local Chromium extension and macOS menu bar app for managing unused resources. The browser extension automatically unloads eligible idle tabs using page safety checks, session activity tracking and alarm-based scheduling (chunks 03–05). Its popup provides an inactivity threshold, pause/resume, tab/site protection, restore-last-unloaded, manual close-unloaded-tabs, history export and confirmed reset controls. Browser implementation, automated real-Chrome acceptance and local release packaging are complete; the native save-picker check remains manual. Native resource monitoring and desktop process actions belong to later milestones.
 
 ## Build and verify
 
@@ -23,6 +23,8 @@ npm test
 npm run build:extension
 npm run build:desktop
 ```
+
+For extension-only verification and a ZIP/checksum, use `npm run verify:browser`. Run `npm run test:browser` for isolated real-Chrome acceptance, `npm run fixtures:browser` for offline test pages, and `npm run benchmark:browser -- --smoke` to verify the resource collector. The [standalone browser guide](browser/README.md) covers installation, updates, safety limits, evaluation and removal without building the native app.
 
 ## Try the native app
 
@@ -104,7 +106,9 @@ Each scan ranks candidates by longest observed inactivity, makes at most two dis
 
 Local preferences include learned hostname delays. A confirmed rapid restore doubles the effective delay, capped at 24 hours. Discard records are consumed before the preference update, preventing duplicate learning after a crash; an interrupted update can lose that one adjustment. A browser rejection or an API response that does not confirm the same discarded tab never counts as success. The local `browserHistory` holds at most 500 events containing only timestamp, tab ID, hostname, action and reason. Exact URLs are retained only in session observations for navigation binding; history excludes URLs, titles and input values.
 
-### Manual browser acceptance (pending)
+### Browser acceptance scenarios
+
+The isolated real-Chrome runner covers the core scenarios below; see the [browser acceptance record](browser/ACCEPTANCE.md) for observed results and limits. The native Save/Cancel picker remains a guided manual check. These scenarios also support testing other Chromium versions and headed installations.
 
 - Reload the packaged extension, accept its permissions and refresh disposable test pages. Set the threshold to five minutes, leave one simple unedited HTTP/HTTPS page in the background and wait for a minute scan after its grace period. Check that it becomes discarded in `chrome://discards` and remains in the tab strip.
 - Keep active tabs in two windows, a pinned tab, an edited form, a media-playing page and a default protected site open. None should be unloaded. An active download should veto all new unloads. Pages opened before observation without a refreshed probe should stay protected.
@@ -120,7 +124,7 @@ The first half adds current-tab protection, persistent site-rule management and 
 
 Restore uses confirmed session discard records and validates the displayed tab ID, hostname, discard timestamp and live exact URL. It skips unavailable records when finding a candidate and rejects a changed selection on click. Activation triggers the existing rapid-restore feedback path at most once. A window-focus failure is reported as partial success after selecting the tab. No new permissions are required.
 
-Additional manual Chrome acceptance remains pending:
+Additional scenarios for headed installations and other Chromium versions:
 
 - Protect and unprotect the current ordinary web tab; verify the button state survives popup/worker reopening and protection survives navigation. Restart the browser separately and confirm session tab protection clears.
 - Protect a site, reopen the popup and verify the saved rule. Visit a subdomain and confirm the inherited parent rule appears. Remove a rule under **Manage protected sites** and confirm only that rule is removed; remaining matching rules continue protecting the site. Saved rules must survive a browser restart.
@@ -133,14 +137,14 @@ Clearing history preserves preferences, learning, pause and available restore re
 
 The popup inspects current-page safety on demand and explains edit, media, frame and detected capture/sharing protection. Edit reset requires a literal confirmed request bound to the displayed tab ID/exact URL, a fresh successful reset response and a final tab lookup. It records fresh interaction grace and preserves independent protections. Confirmation dialogs support Cancel/Escape, and controls block duplicate or overlapping resets and preference writes. No additional permissions were added.
 
-Final manual acceptance for these controls remains pending:
+Supplementary headed acceptance for these controls:
 
 - Export nonempty and empty history; verify valid JSON and the documented metadata-only fields. Cancel a save dialog and confirm history remains. Check the completed download separately from the popup's started message.
 - Cancel each reset, including with Escape, and confirm no data changed. Confirm history-only and learning-only resets separately and verify unrelated settings/protections survive.
 - Confirm a full reset and reopen the popup: defaults, empty history/learning, no tab exceptions or restore records, and paused automatic unloading should be visible. Existing unloaded tabs and edited pages must remain untouched. Resume manually when ready.
 - On a disposable edited page, cancel edit reset first, then save work and confirm it. Confirm five-minute interaction grace, fresh edits reapplying protection, and independent media/frame/site/tab protections remaining effective. A missing probe or changed page should leave the control disabled or report an error.
 
-Chunk 06 implementation is complete. Real Chrome popup layout/dialog focus, save dialogs, download completion, permissions, unload/restore and navigation behavior still require the documented acceptance checks; automated tests use simulated browser/DOM surfaces. Evaluation, final packaging verification and handoff remain later overall-project chunks.
+Chunk 06 implementation and browser release tooling are complete. The real-Chrome runner now exercises popup layout/dialog focus, trusted edits, alarm-driven unload/restore, download veto/completion, resets and session recovery in an isolated profile. Native save-picker interaction and permission-prompt appearance are not established by that headless run. Full resource studies and native-component verification remain later overall-project work; the browser collector, offline workloads, package/checksum and standalone handoff guide are available now.
 
 ## Platform references
 

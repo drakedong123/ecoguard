@@ -9,6 +9,12 @@
     "check": "node scripts/check-extension.mjs",
     "test": "node --test extension/tests/*.test.js",
     "build:extension": "node scripts/build-extension.mjs",
+    "package:extension": "npm run build:extension && node scripts/package-extension.mjs",
+    "verify:browser": "npm run check && npm test && npm run package:extension",
+    "test:browser": "npm run build:extension && node scripts/browser/acceptance.mjs",
+    "test:browser:picker": "npm run build:extension && node scripts/browser/save-picker.mjs",
+    "fixtures:browser": "node scripts/browser/fixtures.mjs",
+    "benchmark:browser": "npm run build:extension && node scripts/browser/benchmark.mjs",
     "build:desktop": "bash scripts/build-desktop.sh",
     "build": "npm run build:extension && npm run build:desktop",
     "verify": "bash scripts/verify.sh"
