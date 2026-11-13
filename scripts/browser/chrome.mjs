@@ -119,7 +119,9 @@ export async function launchChrome({ profile, headed = false } = {}) {
     async page(url, { background = true } = {}) {
       const { targetId } = await send('Target.createTarget', { url, background });
       const page = await attach(targetId);
-      await until(() => page.evaluate('document.readyState === "complete"'), { label: url });
+      const expectedUrl = new URL(url).href;
+      await until(() => page.evaluate(`location.href === ${JSON.stringify(expectedUrl)} && document.readyState === "complete"`),
+        { label: url });
       return page;
     },
     async popup(extensionId, page) {

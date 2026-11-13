@@ -332,6 +332,13 @@ export function createBrowserWorker({ chrome, now = Date.now, probe,
         dispatch(async () => {
           const protectedTab = session.tabs[removedId]?.protected === true || session.tabs[addedId]?.protected === true;
           delete session.tabs[removedId];
+          if (protectedTab) {
+            // Preserve the known exception before a lookup that may temporarily
+            // fail. Unknown page metadata still receives fresh observation grace.
+            session.tabs[addedId] ??= freshRecord({ windowId: null }, time(), true);
+            session.tabs[addedId].protected = true;
+            await persist();
+          }
           const tab = await getTab(addedId);
           if (tab) {
             const confirmed = session.tabs[addedId]?.discard;

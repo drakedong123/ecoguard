@@ -312,6 +312,24 @@ test('tab protection follows Chrome replacement while ordinary replacement recei
   assert.equal(b.session[SESSION_KEY].tabs[9].lastActiveAt, b.clock.at);
 });
 
+test('replacement lookup failure retains tab protection through worker restart and can be unprotected normally', async () => {
+  const b = browser(); await b.worker.start();
+  await b.worker.setTabProtection(1, true, tab(1).url);
+  b.records.delete(1); b.records.set(9, tab(9));
+  b.chrome.tabs.get = async () => { throw new Error('Temporary lookup failure'); };
+  b.chrome.tabs.onReplaced.emit(9, 1); await b.worker.settled();
+  assert.equal(b.session[SESSION_KEY].tabs[1], undefined);
+  assert.equal(b.session[SESSION_KEY].tabs[9].protected, true);
+  const restarted = browser({ tabs: [...b.records.values()], session: b.session, local: b.local, clock: b.clock });
+  await restarted.worker.start();
+  restarted.clock.at = 6 * MINUTE;
+  await restarted.worker.scan();
+  assert.deepEqual(restarted.discarded, []);
+  await restarted.worker.setTabProtection(9, false, tab(9).url);
+  await restarted.worker.scan();
+  assert.deepEqual(restarted.discarded, [9]);
+});
+
 test('rapid restore feedback is applied once, including delayed loading after activation and restart', async () => {
   const b = browser();
   await b.worker.start();

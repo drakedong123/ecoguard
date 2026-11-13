@@ -4,7 +4,7 @@ Verified on 13 November 2026, on macOS arm64 with Chrome 157.0.8103.51. The mani
 
 ## Observed checks
 
-- All 146 automated tests passed. Manifest/assets/JavaScript validation, extension packaging and regression checks passed.
+- All 147 automated tests passed. Manifest/assets/JavaScript validation, extension packaging and regression checks passed.
 - All 16 isolated real-Chrome acceptance checks passed. The exact successful run is preserved in [acceptance-results.json](acceptance-results.json), including the production-source fingerprint, timestamps, check durations and evidence.
 - A real alarm discarded the eligible read-only page after the actual five-minute threshold, without reducing the tab count. No unwanted unloads were observed across eight protected fixtures, including active tabs in two windows, edited/media/frame pages, pinned tabs and tab exceptions.
 - A real in-progress download vetoed an otherwise eligible tab across an alarm. Restore selected and reloaded the existing logical tab, and the confirmed rapid return doubled its host delay. Chrome's replacement tab ID was retained correctly.
@@ -14,7 +14,9 @@ Verified on 13 November 2026, on macOS arm64 with Chrome 157.0.8103.51. The mani
 
 ## Integration issue resolved
 
-The first real alarm exposed a gap in the simulated browser: this Chrome build replaces the tab ID when discarding. The old worker rejected the successful unload as unconfirmed, so history, restore and rapid-return learning were unavailable. The fix accepts a new ID only through Chrome's explicit replacement event during the pending discard, validates the live replacement and transfers the confirmed session record. Three regression tests cover successful replacement/restart/learning, unrelated or changed replacements, and protection persistence. The final full real-browser run passed with the fix.
+The first real alarm exposed a gap in the simulated browser: this Chrome build replaces the tab ID when discarding. The old worker rejected the successful unload as unconfirmed, so history, restore and rapid-return learning were unavailable. The fix accepts a new ID only through Chrome's explicit replacement event during the pending discard, validates the live replacement and transfers the confirmed session record. Four regression tests cover successful replacement/restart/learning, unrelated or changed replacements, protection persistence, and recovery after a failed replacement lookup. Known tab protection is persisted before that lookup, so a temporary API error cannot silently remove it; worker restart and subsequent unprotection are also tested.
+
+Reverification also found a navigation-readiness race in the test runner: a newly created target could still contain its initial blank document when the popup was opened. The runner now waits for the requested URL and a complete document before returning a fixture page. The full real-browser run was repeated against the current production-source fingerprint.
 
 ## Verification limits
 

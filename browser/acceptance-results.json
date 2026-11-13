@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
-  "startedAt": "2026-11-13T05:37:27.134Z",
+  "startedAt": "2026-11-13T08:06:11.814Z",
   "mode": "real Chrome, isolated profile",
   "source": "build/extension",
   "checks": [
     {
       "name": "Packaged extension loads and popup discovers the worker",
       "passed": true,
-      "durationMs": 2,
+      "durationMs": 3,
       "evidence": {
         "version": "0.1.0",
         "permissions": {
@@ -32,7 +32,7 @@
     {
       "name": "Popup layout has a bounded scroll area and no horizontal overflow",
       "passed": true,
-      "durationMs": 24,
+      "durationMs": 32,
       "evidence": {
         "width": 360,
         "height": 498,
@@ -44,27 +44,27 @@
     {
       "name": "Site protection persists and can be removed without changing defaults",
       "passed": true,
-      "durationMs": 256
+      "durationMs": 257
     },
     {
       "name": "Trusted edits, actual media and embedded frames are reported by the content script",
       "passed": true,
-      "durationMs": 446
+      "durationMs": 462
     },
     {
       "name": "Service worker shutdown preserves pause, preferences and tab protection",
       "passed": true,
-      "durationMs": 16
+      "durationMs": 35
     },
     {
       "name": "Only genuine popup senders may mutate worker state",
       "passed": true,
-      "durationMs": 6
+      "durationMs": 2
     },
     {
       "name": "Real alarm unloads an idle safe page without closing or unloading protected fixtures",
       "passed": true,
-      "durationMs": 359020,
+      "durationMs": 358956,
       "evidence": {
         "discarded": 1,
         "retainedTabCount": 11,
@@ -73,8 +73,8 @@
             "action": "discarded",
             "hostname": "127.0.0.1",
             "reason": "eligible",
-            "tabId": 884100456,
-            "timestamp": 1794548607742
+            "tabId": 1135973229,
+            "timestamp": 1794557532379
           }
         ]
       }
@@ -82,14 +82,14 @@
     {
       "name": "An active real download vetoes an otherwise idle eligible tab across an alarm",
       "passed": true,
-      "durationMs": 59323
+      "durationMs": 59278
     },
     {
       "name": "Restore control selects the same tab, reloads it and learns a longer host delay",
       "passed": true,
-      "durationMs": 132,
+      "durationMs": 131,
       "evidence": {
-        "elapsedMs": 125,
+        "elapsedMs": 124,
         "samples": 1,
         "note": "One automation-observed reload; not a median benchmark."
       }
@@ -97,12 +97,12 @@
     {
       "name": "Edit reset confirmation clears only edits and new trusted edits protect again",
       "passed": true,
-      "durationMs": 255
+      "durationMs": 244
     },
     {
       "name": "History export produces a completed metadata-only JSON download",
       "passed": true,
-      "durationMs": 107,
+      "durationMs": 105,
       "evidence": {
         "eventCount": 2,
         "filename": "download.json"
@@ -111,22 +111,22 @@
     {
       "name": "Cancel and confirmed history/learning/full resets honor their documented scopes",
       "passed": true,
-      "durationMs": 345
+      "durationMs": 339
     },
     {
       "name": "Manual close skips a restored selection and closes only a still-discarded selected tab",
       "passed": true,
-      "durationMs": 421
+      "durationMs": 411
     },
     {
       "name": "Browser settings pages disable current-page controls",
       "passed": true,
-      "durationMs": 301
+      "durationMs": 307
     },
     {
       "name": "Browser restart retains local settings but grants new unpaused session grace",
       "passed": true,
-      "durationMs": 966
+      "durationMs": 1046
     }
   ],
   "limitations": [
@@ -134,7 +134,7 @@
     "The download behavior is directed to the disposable output directory, bypassing the OS save picker.",
     "Acceptance timing is not a paired resource-savings benchmark."
   ],
-  "sourceSHA256": "280ca71e5c1dbbfd2014c8e6610b3b7d0a64d22a0748487844dbe4e36a75c776",
+  "sourceSHA256": "1cc3fd5c5229fb43b65bfbf09870aff17cced3d6be311042148813e0ee52c039",
   "browser": {
     "protocolVersion": "1.3",
     "product": "Chrome/157.0.8103.51",
@@ -147,5 +147,5 @@
     "protectedFixtures": 8
   },
   "passed": true,
-  "finishedAt": "2026-11-13T05:44:31.393Z"
+  "finishedAt": "2026-11-13T08:13:16.194Z"
 }
