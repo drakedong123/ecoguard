@@ -7,7 +7,15 @@ export function createUnloadedTabsService(tabs) {
   return {
     async list() {
       const unloaded = await tabs.query({ discarded: true });
-      return [...new Set(unloaded.filter(canClose).map(tab => tab.id))];
+      const unique = new Map();
+      for (const tab of unloaded.filter(canClose)) {
+        if (!unique.has(tab.id)) unique.set(tab.id, {
+          id: tab.id,
+          title: typeof tab.title === 'string' && tab.title.trim() ? tab.title : 'Untitled tab',
+          url: typeof tab.url === 'string' ? tab.url : ''
+        });
+      }
+      return [...unique.values()];
     },
     async close(tabIds) {
       if (!Array.isArray(tabIds) || !tabIds.every(id => Number.isInteger(id) && id >= 0)) {

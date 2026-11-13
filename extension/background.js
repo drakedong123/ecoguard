@@ -36,7 +36,7 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
   } else if (message?.type === 'restoreLastUnloaded') {
     operation = worker.restoreLastUnloaded(message.target);
   } else if (message?.type === 'unloadedTabsStatus') {
-    operation = worker.run(() => unloadedTabs.list().then(tabIds => ({ tabIds })));
+    operation = worker.run(() => unloadedTabs.list().then(tabs => ({ tabs })));
   } else if (message?.type === 'closeUnloadedTabs') {
     operation = worker.run(() => unloadedTabs.close(message.tabIds));
   }

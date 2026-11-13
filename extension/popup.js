@@ -6,7 +6,16 @@ const pause = document.getElementById('pause');
 let paused = false;
 const closeUnloaded = document.getElementById('close-unloaded');
 const unloadedFeedback = document.getElementById('unloaded-feedback');
-let unloadedTabIds = [];
+const unloadedSummary = document.getElementById('unloaded-summary');
+const unloadedList = document.getElementById('unloaded-tabs');
+const selectAllUnloaded = document.getElementById('select-all-unloaded');
+let unloadedTabs = [];
+let selectedUnloadedIds = new Set();
+let unloadedChecks = new Map();
+let unloadedLoading = true;
+let unloadedClosing = false;
+let unloadedRefreshPromise;
+let unloadedRefreshAgain = false;
 const protectTab = document.getElementById('protect-tab');
 const protectSite = document.getElementById('protect-site');
 const protectedSites = document.getElementById('protected-sites');
@@ -59,7 +68,7 @@ function showPauseState(value) {
   paused = value;
   pause.textContent = paused ? 'Resume automatic unloading' : 'Pause automatic unloading';
   feedback.textContent = paused ? 'Automatic unloading is paused for this browser session.'
-    : 'Automatic unloading is on. Safety checks run about once a minute.';
+    : '';
 }
 
 pause.addEventListener('click', async () => {
@@ -84,24 +93,110 @@ async function refreshStatus() {
 
 refreshStatus().catch(error => { feedback.textContent = error.message; });
 
+function unloadedBusy() {
+  return unloadedLoading || unloadedClosing || dataBusy || !!pendingConfirmation;
+}
+
+function updateUnloadedControls() {
+  const busy = unloadedBusy();
+  closeUnloaded.textContent = `Close selected (${selectedUnloadedIds.size})`;
+  closeUnloaded.disabled = busy || selectedUnloadedIds.size === 0;
+  selectAllUnloaded.disabled = busy || unloadedTabs.length === 0;
+  selectAllUnloaded.checked = unloadedTabs.length > 0 && selectedUnloadedIds.size === unloadedTabs.length;
+  selectAllUnloaded.indeterminate = selectedUnloadedIds.size > 0 && selectedUnloadedIds.size < unloadedTabs.length;
+  for (const [id, checkbox] of unloadedChecks) {
+    checkbox.disabled = busy;
+    checkbox.checked = selectedUnloadedIds.has(id);
+  }
+}
+
+function renderUnloadedTabs() {
+  unloadedSummary.textContent = `Unloaded tabs (${unloadedTabs.length})`;
+  unloadedList.replaceChildren();
+  unloadedChecks = new Map();
+  for (const tab of unloadedTabs) {
+    const row = document.createElement('li');
+    const label = document.createElement('label');
+    label.className = 'unloaded-option';
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.value = String(tab.id);
+    checkbox.setAttribute('aria-label', `Close ${tab.title}`);
+    const text = document.createElement('span');
+    text.className = 'tab-description';
+    const title = document.createElement('span');
+    title.className = 'tab-title';
+    title.textContent = tab.title;
+    title.title = tab.title;
+    const url = document.createElement('span');
+    url.className = 'tab-url';
+    url.textContent = tab.url;
+    url.title = tab.url;
+    text.append(title, url);
+    label.append(checkbox, text);
+    row.append(label);
+    unloadedList.append(row);
+    unloadedChecks.set(tab.id, checkbox);
+    checkbox.addEventListener('change', () => {
+      if (unloadedBusy() || unloadedChecks.get(tab.id) !== checkbox) return;
+      if (checkbox.checked) selectedUnloadedIds.add(tab.id);
+      else selectedUnloadedIds.delete(tab.id);
+      updateUnloadedControls();
+    });
+  }
+  if (!unloadedTabs.length) {
+    const empty = document.createElement('li');
+    empty.className = 'hint';
+    empty.textContent = 'No unloaded tabs.';
+    unloadedList.append(empty);
+  }
+  updateUnloadedControls();
+}
+
+selectAllUnloaded.addEventListener('change', () => {
+  if (unloadedBusy()) return;
+  selectedUnloadedIds = new Set(selectAllUnloaded.checked ? unloadedTabs.map(tab => tab.id) : []);
+  updateUnloadedControls();
+});
+
 async function refreshUnloadedTabs() {
-  closeUnloaded.disabled = true;
-  unloadedTabIds = [];
-  closeUnloaded.textContent = 'Close unloaded tabs (0)';
-  const response = await request({ type: 'unloadedTabsStatus' });
-  unloadedTabIds = response.tabIds;
-  closeUnloaded.textContent = `Close unloaded tabs (${unloadedTabIds.length})`;
-  closeUnloaded.disabled = unloadedTabIds.length === 0 || dataBusy || !!pendingConfirmation;
-  return unloadedTabIds.length;
+  if (unloadedRefreshPromise) { unloadedRefreshAgain = true; return unloadedRefreshPromise; }
+  unloadedLoading = true;
+  updateUnloadedControls();
+  unloadedRefreshPromise = (async () => {
+    do {
+      unloadedRefreshAgain = false;
+      const response = await request({ type: 'unloadedTabsStatus' });
+      if (!Array.isArray(response.tabs)) throw new Error('Could not load unloaded tabs. Reopen the popup.');
+      unloadedTabs = response.tabs;
+      const available = new Set(unloadedTabs.map(tab => tab.id));
+      selectedUnloadedIds = new Set([...selectedUnloadedIds].filter(id => available.has(id)));
+      renderUnloadedTabs();
+    } while (unloadedRefreshAgain);
+    return unloadedTabs.length;
+  })();
+  try { return await unloadedRefreshPromise; }
+  catch (error) {
+    unloadedTabs = [];
+    selectedUnloadedIds.clear();
+    renderUnloadedTabs();
+    throw error;
+  } finally {
+    unloadedLoading = false;
+    unloadedRefreshPromise = undefined;
+    updateUnloadedControls();
+  }
 }
 
 closeUnloaded.addEventListener('click', async () => {
-  if (closeUnloaded.disabled || unloadedTabIds.length === 0 || dataBusy || pendingConfirmation) return;
-  closeUnloaded.disabled = true;
+  if (closeUnloaded.disabled || unloadedBusy() || selectedUnloadedIds.size === 0) return;
+  const tabIds = [...selectedUnloadedIds];
+  unloadedClosing = true;
+  updateUnloadedControls();
   unloadedFeedback.textContent = 'Closing unloaded tabs…';
   let summary;
   try {
-    const result = await request({ type: 'closeUnloadedTabs', tabIds: unloadedTabIds });
+    const result = await request({ type: 'closeUnloadedTabs', tabIds });
     summary = `Closed ${result.closed} unloaded tab${result.closed === 1 ? '' : 's'}.`;
     if (result.skipped) summary += ` Skipped ${result.skipped} changed or unavailable tab${result.skipped === 1 ? '' : 's'}.`;
     if (result.failed) summary += ` Could not close ${result.failed} tab${result.failed === 1 ? '' : 's'}; try again.`;
@@ -109,15 +204,25 @@ closeUnloaded.addEventListener('click', async () => {
   unloadedFeedback.textContent = summary;
   try { await refreshUnloadedTabs(); }
   catch (error) { unloadedFeedback.textContent = `${summary} Could not refresh the count: ${error.message}`; }
+  unloadedClosing = false;
+  updateUnloadedControls();
   try { await refreshManagement(); }
   catch (error) { protectionFeedback.textContent = error.message; }
 });
 
-refreshUnloadedTabs().then(count => {
-  unloadedFeedback.textContent = count === 0
-    ? 'No unloaded tabs available to close.'
-    : `${count} unloaded tab${count === 1 ? '' : 's'} available to close.`;
-}).catch(error => { unloadedFeedback.textContent = error.message; });
+refreshUnloadedTabs().then(() => { unloadedFeedback.textContent = ''; })
+  .catch(error => { unloadedFeedback.textContent = error.message; });
+
+function unloadedTabsChanged() {
+  if (unloadedClosing) return; // The close handler refreshes after the whole batch.
+  refreshUnloadedTabs().catch(error => { unloadedFeedback.textContent = error.message; });
+}
+chrome.tabs?.onUpdated?.addListener((id, change) => {
+  if (['discarded', 'pinned', 'url', 'title'].some(key => Object.hasOwn(change, key))) unloadedTabsChanged();
+});
+for (const event of ['onCreated', 'onRemoved', 'onActivated', 'onReplaced']) {
+  chrome.tabs?.[event]?.addListener(unloadedTabsChanged);
+}
 
 function updateManagementButtons() {
   const busy = managementBusy || dataBusy || !!pendingConfirmation;
@@ -139,11 +244,11 @@ function renderManagement() {
   if (tab?.protected) states.push('This tab is protected for the browser session.');
   if (tab?.matchingHosts.length) states.push(`Site protection: ${tab.matchingHosts.join(', ')}.`);
   document.getElementById('protection-state').textContent = states.join(' ') ||
-    (tab ? 'No tab or site exception. Other safety checks still apply.' : 'Protection controls are unavailable for this page.');
+    (tab ? '' : 'Protection controls are unavailable for this page.');
   const safety = tab?.safety;
   const pageStates = [];
   if (safety?.inspected === true) {
-    pageStates.push(safety.edited ? 'Edited page protection is active.' : 'No edited-page protection detected.');
+    if (safety.edited) pageStates.push('Edited page protection is active.');
     if (safety.playingMedia) pageStates.push('Playing media is protected.');
     if (safety.hasEmbeddedFrame) pageStates.push('Embedded content is protected.');
     if (safety.capturing || safety.sharing) pageStates.push('Detected capture/sharing is protected.');
@@ -217,7 +322,7 @@ protectSite.addEventListener('click', () => managementAction(protectSite, protec
 restoreLast.addEventListener('click', () => managementAction(restoreLast, restoreFeedback,
   { type: 'restoreLastUnloaded', target: management?.restoreTarget }, 'Selected the unloaded tab for reload.'));
 
-refreshManagement().then(() => { protectionFeedback.textContent = 'Protection controls ready.'; })
+refreshManagement().then(() => { protectionFeedback.textContent = ''; })
   .catch(error => { protectionFeedback.textContent = error.message; });
 
 function updateDataButtons() {
@@ -232,7 +337,7 @@ function updateAllButtons() {
   idle.disabled = blocked;
   save.disabled = blocked;
   pause.disabled = blocked;
-  closeUnloaded.disabled = dataBusy || !!pendingConfirmation || unloadedTabIds.length === 0;
+  updateUnloadedControls();
   updateManagementButtons();
 }
 

@@ -7,26 +7,22 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header><span class="mark" aria-hidden="true">e</span><div><h1>EcoGuard</h1><p>Browser resource manager</p></div></header>
+  <header><span class="mark" aria-hidden="true">e</span><div><h1>EcoGuard</h1><p>v<span id="version">0.1.0</span></p></div></header>
   <main>
-    <p class="version">EcoGuard <span id="version">0.1.0</span></p>
-    <h2>Keep your workspace lighter.</h2>
-    <p>Eligible idle tabs unload automatically and stay in the tab bar. Select an unloaded tab to reload it.</p>
     <button id="pause" type="button" disabled>Pause automatic unloading</button>
     <form id="settings">
-      <label for="idle">Inactivity threshold in minutes</label>
-      <div class="field"><input id="idle" type="number" min="5" max="1440" step="1" value="30" required disabled><button id="save" disabled>Save preference</button></div>
-      <p class="hint">5–1440 minutes. New and recently active tabs get a full inactivity grace period.</p>
+      <label for="idle">Idle timeout (minutes)</label>
+      <div class="field"><input id="idle" type="number" min="5" max="1440" step="1" value="30" required disabled><button id="save" disabled>Save</button></div>
+      <p class="hint">5–1440 minutes.</p>
     </form>
     <p id="feedback" role="status" aria-live="polite">Connecting to EcoGuard…</p>
     <section class="management" aria-labelledby="protection-heading">
       <h2 id="protection-heading">Protect your work</h2>
       <p id="current-site" class="site-name">Checking the current tab…</p>
       <div class="controls">
-        <button id="protect-tab" type="button" disabled>Protect this tab</button>
-        <button id="protect-site" type="button" disabled>Protect this site</button>
+        <button id="protect-tab" type="button" title="Protect until the browser session ends" disabled>Protect this tab</button>
+        <button id="protect-site" type="button" title="Save protection for this hostname and its subdomains" disabled>Protect this site</button>
       </div>
-      <p class="hint">Tab protection lasts for this browser session. Site protection is saved and includes subdomains. Both prevent automatic unloading.</p>
       <p id="protection-state" class="hint"></p>
       <p id="edit-state" class="hint">Checking page edit protection…</p>
       <button id="reset-edits" type="button" disabled>Clear edit protection…</button>
@@ -42,17 +38,19 @@
       <button id="restore-last" type="button" disabled>Restore last unloaded tab</button>
       <p id="restore-feedback" role="status" aria-live="polite"></p>
     </section>
-    <section class="unloaded" aria-labelledby="unloaded-heading">
-      <h2 id="unloaded-heading">Close unloaded tabs</h2>
-      <p class="hint">Remove unloaded tabs from the tab bar across all windows, including tabs unloaded by Chrome. Active and pinned tabs are kept.</p>
-      <button id="close-unloaded" type="button" disabled>Close unloaded tabs (0)</button>
-      <p id="unloaded-feedback" role="status" aria-live="polite">Checking unloaded tabs…</p>
+    <section class="unloaded" aria-labelledby="unloaded-summary">
+      <details id="unloaded-picker">
+        <summary id="unloaded-summary">Unloaded tabs (…)</summary>
+        <label class="select-all"><input id="select-all-unloaded" type="checkbox" disabled><span>Select all</span><span class="scope">All windows</span></label>
+        <ul id="unloaded-tabs" aria-label="Choose unloaded tabs to close"></ul>
+      </details>
+      <button id="close-unloaded" type="button" disabled>Close selected (0)</button>
+      <p id="unloaded-feedback" role="status" aria-live="polite">Loading…</p>
     </section>
     <section class="management" aria-labelledby="data-heading">
       <h2 id="data-heading">Your local data</h2>
       <p id="data-summary" class="hint">Checking history and learned delays…</p>
       <button id="export-history" type="button" disabled>Export history as JSON</button>
-      <p class="hint">Includes timestamps, tab IDs, hostnames, actions and reasons. No full URLs, titles or page content.</p>
       <details>
         <summary>Reset local data</summary>
         <div class="controls reset-controls">
@@ -72,7 +70,6 @@
       <button id="confirm-reset" type="button">Confirm reset</button>
     </div>
   </dialog>
-  <footer>Page safety stays local. Tabs close only when you click.</footer>
   <script type="module" src="popup.js"></script>
 </body>
 </html>
